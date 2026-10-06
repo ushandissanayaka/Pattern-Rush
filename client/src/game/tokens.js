@@ -88,14 +88,17 @@ export function drawBarCell(g, id, x, y, w, h) {
 // Ball texture: the face is drawn flat on its own canvas, then projected onto the front
 // of the sphere (orthographic decal) so it is not stretched like a world map.
 const texCache = new Map();
-function ballTexture(id) {
-  if (!texCache.has(id)) {
-    const t = TOKEN[id];
+function ballTexture(id) { const t = TOKEN[id]; return faceBallTexture(id, t.color, t.face); }
+/** Sphere texture with a face on the front (+Z). `base` = colour or (g, w, h) => paint. */
+export function faceBallTexture(key, base, faceKind = 'smile') {
+  if (!texCache.has(key)) {
+    const t = { color: typeof base === 'string' ? base : '#ffffff' };
     const face = document.createElement('canvas'); face.width = face.height = 512;
-    const fg = face.getContext('2d'); drawFace(fg, t.face, 256, 256, 250);
+    const fg = face.getContext('2d'); drawFace(fg, faceKind, 256, 256, 250);
     const fd = fg.getImageData(0, 0, 512, 512).data;
     const W = 1024, H = 512, c = document.createElement('canvas'); c.width = W; c.height = H;
     const g = c.getContext('2d'); g.fillStyle = t.color; g.fillRect(0, 0, W, H);
+    if (typeof base === 'function') base(g, W, H);
     const img = g.getImageData(0, 0, W, H), d = img.data;
     for (let r = 0; r < H; r++) {
       const th = (r + 0.5) / H * Math.PI, st = Math.sin(th), y = Math.cos(th);
@@ -111,9 +114,9 @@ function ballTexture(id) {
     }
     g.putImageData(img, 0, 0);
     const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
-    texCache.set(id, tex);
+    texCache.set(key, tex);
   }
-  return texCache.get(id);
+  return texCache.get(key);
 }
 // face only (transparent background) for the decal
 function drawFaceOnly(g, face, cx, cy, r) { drawFace(g, face, cx, cy, r); }
@@ -171,4 +174,30 @@ export function tokenMesh(id, size = 3) {
   m.traverse(o => { if (o.isMesh) o.castShadow = true; });
   m.userData.token = id;
   return m;
+}
+
+/** Data-URL icon of a face ball / block in any colour (shop & index art). extra: 'nerd' adds glasses. */
+const faceCache = new Map();
+export function faceIcon(color, face = 'smile', shape = 'ball', extra = '') {
+  const key = [color, face, shape, extra].join('|');
+  if (!faceCache.has(key)) {
+    const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
+    if (shape === 'block') {
+      g.fillStyle = color; g.fillRect(14, 14, 100, 100);
+      g.fillStyle = 'rgba(255,255,255,.22)'; g.fillRect(14, 14, 100, 14); g.fillStyle = 'rgba(0,0,0,.18)'; g.fillRect(14, 100, 100, 14);
+      if (face) drawFace(g, face, 64, 66, 44);
+    } else {
+      const r = 54, grad = g.createRadialGradient(46, 40, 6, 64, 64, r);
+      grad.addColorStop(0, '#ffffff'); grad.addColorStop(0.2, color); grad.addColorStop(1, color);
+      g.fillStyle = grad; g.beginPath(); g.arc(64, 64, r, 0, Math.PI * 2); g.fill();
+      if (face) drawFace(g, face, 64, 64, r);
+      if (extra === 'nerd') {
+        g.strokeStyle = '#3a2a14'; g.lineWidth = 5;
+        for (const x of [46, 82]) { g.beginPath(); g.arc(x, 52, 13, 0, Math.PI * 2); g.stroke(); }
+        g.beginPath(); g.moveTo(59, 52); g.lineTo(69, 52); g.stroke();
+      }
+    }
+    faceCache.set(key, c.toDataURL());
+  }
+  return faceCache.get(key);
 }
