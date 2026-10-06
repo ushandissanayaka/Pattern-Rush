@@ -16,6 +16,7 @@ import { C } from '../config/palette.js';
 import { addCollider, addColliderBox } from './physics.js';
 import { BLOOM_THRESHOLD } from '../effects/post.js';
 import { mergeStatic } from './optimize.js';
+import { faceBallTexture } from '../game/tokens.js';
 
 export const WORLD = {
   spawn: new THREE.Vector3(0, 0, 28),
@@ -250,7 +251,7 @@ const padMats = { red: matte({ map: studTex(C.padRed), roughness: 0.6 }), blue: 
 function booth(side, z, trim, state, parent, seam = 1) {
   const g = new THREE.Group();
   const white = mat(C.boothWhite), inner = boothWallMats[trim];
-  const nm = neon(trim === 'red' ? C.trimRed : C.trimCyan);
+  const nm = neon(trim === 'red' ? C.trimRed : C.trimCyan, 1.3, 0.35);   // thin strips, softer glow
   // local frame: +X faces the road
   box(BOOTH_D, 1, BOOTH_W, white, 0, 0.5, 0, g);                                      // floor
   box(1.5, BOOTH_H, BOOTH_W - 2, inner, -BOOTH_D / 2 + 1.5, BOOTH_H / 2, 0, g);        // back wall
@@ -259,11 +260,11 @@ function booth(side, z, trim, state, parent, seam = 1) {
     box(BOOTH_D, BOOTH_H, 1.2, inner, 0, BOOTH_H / 2, s * (BOOTH_W / 2 - 1.6), g, false); // inner side panel
     box(BOOTH_D, BOOTH_H + 1, 2, white, 0, (BOOTH_H + 1) / 2, s * BOOTH_W / 2, g);        // side wall
     box(3.4, BOOTH_H + 5, 3.4, white, BOOTH_D / 2 - 1, (BOOTH_H + 5) / 2, s * (BOOTH_W / 2 + 0.6), g); // front pillar
-    box(0.5, BOOTH_H + 2, 0.9, nm, BOOTH_D / 2 + 0.75, (BOOTH_H + 2) / 2 + 0.5, s * (BOOTH_W / 2 - 1.6), g, false); // neon front
-    box(0.5, BOOTH_H - 4, 0.6, nm, -BOOTH_D / 2 + 2.4, BOOTH_H / 2, s * (BOOTH_W / 2 - 3), g, false);            // neon back corners
-    box(BOOTH_D - 2, 0.6, 0.6, nm, 0, BOOTH_H + 1.1, s * (BOOTH_W / 2 - 0.6), g, false);                          // neon along wall top
+    box(0.22, BOOTH_H + 2, 0.4, nm, BOOTH_D / 2 + 0.75, (BOOTH_H + 2) / 2 + 0.5, s * (BOOTH_W / 2 - 1.6), g, false); // neon front
+    box(0.22, BOOTH_H - 4, 0.3, nm, -BOOTH_D / 2 + 2.4, BOOTH_H / 2, s * (BOOTH_W / 2 - 3), g, false);            // neon back corners
+    box(BOOTH_D - 2, 0.28, 0.28, nm, 0, BOOTH_H + 1.1, s * (BOOTH_W / 2 - 0.6), g, false);                          // neon along wall top
   }
-  box(0.6, 0.6, BOOTH_W - 4, nm, -BOOTH_D / 2 + 2.4, BOOTH_H - 2.5, 0, g, false);
+  box(0.28, 0.28, BOOTH_W - 4, nm, -BOOTH_D / 2 + 2.4, BOOTH_H - 2.5, 0, g, false);
   // tiered stand: lower facade with the code bar, upper deck where players stand
   box(14, 9, BOOTH_W - 4, white, BOOTH_D / 2 - 7, 4.5, 0, g);
   box(14, 13, BOOTH_W - 4, white, BOOTH_D / 2 - 21, 6.5, 0, g);
@@ -373,8 +374,8 @@ function wheelSpin(parent) {
 function nextUpdateBoard(parent) {
   const g = new THREE.Group();
   // board: thick slate-purple frame with a light tile pattern around a red screen, tilted back
-  const W = 21, H = 9.6, T = 1.4;
-  const frameTex = canvasTex(420, 192, (c, w, h) => {
+  const W = 21, H = 12, T = 1.4;
+  const frameTex = canvasTex(420, 240, (c, w, h) => {
     c.fillStyle = '#6d68a0'; c.fillRect(0, 0, w, h);
     const tile = 20;
     for (let x = 0; x < w; x += tile) for (let y = 0; y < h; y += tile) {
@@ -386,21 +387,35 @@ function nextUpdateBoard(parent) {
   const sideMat = mat('#5b5690');
   const frame = new THREE.Mesh(new THREE.BoxGeometry(W, H, T), [sideMat, sideMat, sideMat, sideMat, matte({ map: frameTex }), sideMat]);
   frame.castShadow = true; frame.receiveShadow = true;
-  const screenTex = canvasTex(256, 100, (c, w, h) => {    // PLACEHOLDER screen art (original face not copied)
+  // red screen with a big grinning face (screenshot 81); canvas matches the screen's 3.1:1 shape
+  const screenTex = canvasTex(430, 200, (c, w, h) => {
     c.fillStyle = '#e3101f'; c.fillRect(0, 0, w, h);
-    c.fillStyle = '#ffffff'; c.beginPath(); c.roundRect(64, 34, 128, 12, 6); c.fill(); c.beginPath(); c.roundRect(88, 56, 80, 10, 5); c.fill();
+    const cx = w / 2;
+    c.fillStyle = '#111';
+    for (const dx of [-30, 30]) { c.beginPath(); c.ellipse(cx + dx, 56, 10, 15, 0, 0, Math.PI * 2); c.fill(); }
+    // thick crescent grin: white teeth, tooth lines, lavender shade at the bottom, black outline
+    const mw = 112, my = 94;
+    const mouth = () => { c.beginPath(); c.moveTo(cx - mw, my); c.quadraticCurveTo(cx, my + 120, cx + mw, my); c.quadraticCurveTo(cx, my + 34, cx - mw, my); c.closePath(); };
+    mouth(); c.fillStyle = '#ffffff'; c.fill();
+    c.save(); mouth(); c.clip();
+    c.fillStyle = 'rgba(170,150,230,.6)'; c.beginPath(); c.moveTo(cx - mw, my); c.quadraticCurveTo(cx, my + 120, cx + mw, my); c.quadraticCurveTo(cx, my + 92, cx - mw, my); c.fill();
+    c.strokeStyle = '#111'; c.lineWidth = 3;
+    c.beginPath(); c.moveTo(cx - mw, my + 4); c.quadraticCurveTo(cx, my + 80, cx + mw, my + 4); c.stroke();   // line between upper and lower teeth
+    for (let i = -8; i <= 8; i++) { c.beginPath(); c.moveTo(cx + i * 13, my - 10); c.lineTo(cx + i * 14, my + 70); c.stroke(); }
+    c.restore();
+    mouth(); c.lineWidth = 8; c.strokeStyle = '#111'; c.lineJoin = 'round'; c.stroke();
   });
   const screen = new THREE.Mesh(new THREE.PlaneGeometry(W - 4.2, H - 4.2), matte({ map: screenTex, emissive: '#ffffff', emissiveMap: screenTex, emissiveIntensity: 0.25 }));
   screen.position.z = T / 2 + 0.02;
   const board = new THREE.Group(); board.add(frame, screen);
-  board.position.set(0, 7.6, 0); board.rotation.x = -0.12; g.add(board);
+  board.position.set(0, 8.6, 0); board.rotation.x = -0.12; g.add(board);
   // two splayed legs ending in chunky feet
   const legMat = mat('#625d97');
   for (const sx of [-1, 1]) {
     const leg = box(1.1, 6, 1.1, legMat, sx * (W / 2 - 1.2), 3, -0.9, g, false); leg.rotation.x = 0.25;
     box(2.4, 1.2, 3, mat('#57528a'), sx * (W / 2 - 1.2), 0.6, -0.4, g);
   }
-  const t = textSprite([{ text: 'NEXT UPDATE', color: C.textNextUpdate, size: 110 }], 2.7); t.position.set(0, 15.5, 0); g.add(t);
+  const t = textSprite([{ text: 'NEXT UPDATE', color: C.textNextUpdate, size: 110 }], 2.7); t.position.set(0, 17.6, 0); g.add(t);
   // mauve crates stacked behind and beside (screenshots 31, 32)
   crate(-6, 0, -4.5, 3.4, g, 0.2, crateMatMauve); crate(-2.8, 0, -4.8, 3.2, g, -0.1, crateMatMauve); crate(-4.5, 3.3, -4.6, 3, g, 0.4, crateMatMauve);
   crate(7.5, 0, -4.4, 3.4, g, 0.3, crateMatMauve); crate(10.6, 0, -2.4, 3, g, -0.3, crateMatMauve);
@@ -434,21 +449,25 @@ function packsStall(parent) {
   box(18.2, 1, 0.6, mat('#e3191e'), 0, -0.4, 3.9, aw, false);
   aw.position.set(0, 12.7, 0.3); aw.rotation.x = 0.24; g.add(aw);
   // PLACEHOLDER pack items on crate pedestals behind the counter (plain spheres, no faces)
-  const rainbow = canvasTex(64, 64, (c, w, h) => {
+  // two smiling balls on the counter (screenshot 82): pastel rainbow + yellow
+  const pastel = faceBallTexture('packs-pastel', (c, w, h) => {
     const gr = c.createLinearGradient(0, 0, 0, h);
     ['#ffd6ec', '#ffe1a8', '#fff3a6', '#c9f7c2', '#bfe6ff', '#e0c8ff'].forEach((col, i, a) => gr.addColorStop(i / (a.length - 1), col));
     c.fillStyle = gr; c.fillRect(0, 0, w, h);
-  });
+  }, 'smile');
+  const yellow = faceBallTexture('packs-yellow', '#f7e21c', 'smile');
   crate(-3.6, 0, 0.6, 3, g, 0.1); crate(3.6, 0, 0.6, 3, g, -0.1); crate(0, 0, -0.6, 2.6, g, 0.3);
-  const s1 = new THREE.Mesh(new THREE.SphereGeometry(1.35, 24, 16), matte({ map: rainbow })); s1.position.set(-3.6, 4.4, 0.6); s1.castShadow = true; g.add(s1);
-  const s2 = new THREE.Mesh(new THREE.SphereGeometry(1.35, 24, 16), mat('#f7e21c')); s2.position.set(3.6, 4.4, 0.6); s2.castShadow = true; g.add(s2);
+  for (const [x, tex] of [[-3.6, pastel], [3.6, yellow]]) {
+    const b = new THREE.Mesh(new THREE.SphereGeometry(1.45, 40, 24), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.35 }));
+    b.scale.set(1.08, 0.94, 1); b.position.set(x, 5.9, 2.2); b.castShadow = true; g.add(b);   // sitting on the counter, face toward the front (+Z)
+  }
   const s3 = new THREE.Mesh(new THREE.SphereGeometry(0.8, 16, 12), mat('#f4f6f8')); s3.position.set(0, 3.4, -0.6); g.add(s3);
   // crate stacks either side
   crate(-11, 0, 0, 3.6, g, 0.15); crate(-11.2, 3.6, 0.2, 3.2, g, -0.2); crate(-14.2, 0, -1.6, 3.4, g, 0.3);
   crate(10.8, 0, -0.8, 3.4, g, -0.15); crate(13.6, 0, 0.8, 3.2, g, 0.25); crate(11.6, 3.4, -0.6, 3, g, 0.1);
   const t = textSprite([{ text: 'PACKS', color: C.textPacks, size: 120 }, { text: 'Spend Cash Here', color: C.textPacksSub, size: 72, font: "'Fredoka'", weight: 700, stroke: 0.16 }], 4.8);
   t.position.set(0, 19.5, 0); g.add(t);
-  g.position.set(-50, 0, 12); g.rotation.y = Math.atan2(50, 14);   // against the -X edge, facing the spawn (screenshots 33, 43, 44)
+  g.position.set(-52, 0, 4); g.rotation.y = Math.PI / 2 - 0.25;   // brought forward, turned to face across the plaza (screenshot 82)
   g.userData.class = 'landmark-packs'; parent.add(g);
 }
 
@@ -481,11 +500,11 @@ function bridgeChallenge(parent) {
   crate(4.6, 0.9, 0.6, 3.4, g, 0.25); crate(-5, 0.9, 1, 3.2, g, -0.2);
   const ball = new THREE.Mesh(new THREE.SphereGeometry(4, 32, 24), ballMat);   // simple smiley face
   ball.position.set(0, 4.9, 1); ball.castShadow = true; g.add(ball);
-  addColliderBox(new THREE.Vector3(0, 4.9, -21), new THREE.Vector3(6, 8, 6));
+  addColliderBox(new THREE.Vector3(0, 4.9, -24), new THREE.Vector3(6, 8, 6));
   const t1 = textSprite([{ text: 'BRIDGE CHALLENGE', color: '#ffd21a', size: 100, font: "'Fredoka'", weight: 700, stroke: 0.14 }], 2.6);
   t1.position.set(0, 13.6, 0); g.add(t1);
   const t2 = rainbowSign('Exclusive Rewards ', 'NOW!', 1.9); t2.position.set(0, 11.6, 0); g.add(t2);
-  g.position.set(0, 0, -22); parent.add(g);
+  g.position.set(0, 0, -25); parent.add(g);   // clear of the near U-turn belt
   g.userData.class = 'landmark-bridge-challenge PLACEHOLDER';
 }
 
@@ -780,13 +799,17 @@ export function buildWorld(scene) {
     holder.rotation.y = Math.atan2(-dx, -dz); holder.position.set(cx, 0.04, cz);
     holder.userData.dynamic = true; root.add(holder);
     const along = dx !== 0;
-    CONVEYORS.push({ minX: cx - (along ? len : w) / 2, maxX: cx + (along ? len : w) / 2, minZ: cz - (along ? w : len) / 2, maxZ: cz + (along ? w : len) / 2, dx, dz });
+    CONVEYORS.push({ minX: cx - (along ? len : w) / 2, maxX: cx + (along ? len : w) / 2, minZ: cz - (along ? w : len) / 2, maxZ: cz + (along ? w : len) / 2, dx, dz, cx, cz });
     ACTORS.push((dt) => { tex.offset.y -= dt * CONVEYOR_SPEED / 12; });   // 12 studs per chevron tile
   };
-  conveyor(-16, (laneTop + laneBot) / 2, 12, laneLen, 0, 1);
-  conveyor(16, (laneTop + laneBot) / 2, 12, laneLen, 0, -1);
-  conveyor(0, laneTop + 6, 12, 44.8, 1, 0);
-  conveyor(0, laneBot - 6, 12, 44.8, -1, 0);
+  // Corners (screenshots 79, 80): each corner square belongs to the stretch you LEAVE it on,
+  // so the loop is a pinwheel and you ride all the way round without walking:
+  //   near end:  -X lane (+Z) → near strip covers the left corner (+X) → +X lane covers the right corner (-Z)
+  //   far end:   +X lane (-Z) → far strip covers the right corner (-X) → -X lane covers the left corner (+Z)
+  conveyor(-16, (laneTop + laneBot - 12) / 2, 12, laneLen + 12, 0, 1);     // -X lane, incl. far-left corner
+  conveyor(16, (laneTop + 12 + laneBot) / 2, 12, laneLen + 12, 0, -1);     // +X lane, incl. near-right corner
+  conveyor(-6, laneTop + 6, 12, 32, 1, 0);                                 // near strip, incl. near-left corner
+  conveyor(6, laneBot - 6, 12, 32, -1, 0);                                 // far strip, incl. far-right corner
   for (const s of [-1, 1]) {
     box(0.8, 0.4, laneLen + 12, mat(C.curb), s * 22.4, 0.2, (laneTop + laneBot) / 2, root, false);
     box(0.8, 0.4, laneLen - 12, mat(C.curb), s * 9.6, 0.2, (laneTop + laneBot) / 2, root, false);
@@ -847,7 +870,7 @@ export function buildWorld(scene) {
   pineTree(60, -6, 38, root);             // big pine in the front corner by Next Update
   roundTree(-66, -6, 10, root, 0, 3);
   crate(-56, 0, 54, 3.4, root, 0.4); crate(-53, 0, 56, 3, root, 0.1); crate(-55, 3.4, 54.5, 3, root, 0.6);   // crates under the big tree
-  stepBlock(-46, 44, root, 0.2); stepBlock(-44, 30, root, -0.3, 1.2); stepBlock(-46, 2, root, 0.5, 0.8);
+  stepBlock(-46, 44, root, 0.2); stepBlock(-44, 30, root, -0.3, 1.2);
   crate(-56, 0, 34, 3.4, root, 0.3); crate(-52.6, 0, 33, 3.2, root, -0.2); crate(-55, 3.4, 33.6, 3, root, 0.7);
   crate(60, 0, 52, 3.6, root, 0.3); crate(58, 3.6, 52, 3, root, 0.6); crate(62, 0, 48.6, 3, root, -0.2);    // crates by the wheel
   crate(58, 0, 26, 3.4, root, 0.5, crateMatMauve); crate(60.5, 0, 23, 3, root, 0.1, crateMatMauve);           // crates between wheel and board

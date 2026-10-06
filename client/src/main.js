@@ -163,10 +163,13 @@ function walk(dt) {
   }
   // conveyor road: standing on a chevron strip carries you in the arrow direction
   state.onConveyor = false;
-  if (feet.y < 0.6) {
+  if (feet.y < 1.2) {
     for (const c of CONVEYORS) {
       if (feet.x >= c.minX && feet.x <= c.maxX && feet.z >= c.minZ && feet.z <= c.maxZ) {
-        vel.x += c.dx * CONVEYOR_SPEED; vel.z += c.dz * CONVEYOR_SPEED; state.onConveyor = true; break;
+        vel.x += c.dx * CONVEYOR_SPEED; vel.z += c.dz * CONVEYOR_SPEED; state.onConveyor = true;
+        // gentle pull toward the middle of the belt so you ride round the corners
+        if (!inputLength || inputLength <= 0.12) { if (c.dx) vel.z += (c.cz - feet.z) * 2.5; else vel.x += (c.cx - feet.x) * 2.5; }
+        break;
       }
     }
   }

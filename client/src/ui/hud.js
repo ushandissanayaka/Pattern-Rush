@@ -1,6 +1,7 @@
 // HUD glue: screen switcher (URL hash), avatar slots, dev panel, offer rotation,
 // event countdown.
 import { getLocalPlayer } from '../bloxity/legion-sdk.js';
+import { initPopups, openBuy, OFFER_INFO } from './popups.js';
 // Everything that will later call into game logic is a named no-op stub below,
 // so selectors in docs/DESIGN.md map 1:1 onto future functions.
 
@@ -51,7 +52,7 @@ export const Stubs = {
   openIndex: () => showScreen('index'),
   openFreeGift: () => showScreen('gift'),
   openPacks: () => showScreen('packs'),
-  buyOffer: (id) => console.info('[stub] buyOffer', id),
+  buyOffer: (id) => OFFER_INFO[id] && openBuy(OFFER_INFO[id]),
   joinQueue: () => showScreen('matchmaking'),
   returnToLobby: () => window.dispatchEvent(new CustomEvent('cc:return-to-lobby')),
   openDaily: () => showScreen('daily'),
@@ -91,6 +92,7 @@ function rotateOffers(step) {
 
 /* ---------- init ---------- */
 export function initHud() {
+  initPopups(showScreen);
   document.querySelectorAll('[data-action]').forEach(el => {
     el.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -140,7 +142,9 @@ export function initHud() {
     showTimer();
   }, 1000);
   window.addEventListener('hashchange', () => showScreen(location.hash.slice(1).split('?')[0]));
-  showScreen(location.hash.slice(1).split('?')[0] || 'lobby');
+  // Daily Rewards pops up when the game opens (screenshot 83)
+  const startHash = location.hash.slice(1).split('?')[0];
+  showScreen(startHash && startHash !== 'lobby' ? startHash : 'daily');
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && document.body.dataset.screen !== 'lobby') showScreen('lobby'); });
 
   // offers rotate every ≈10.2 s, as in the video
