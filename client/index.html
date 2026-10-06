@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Cipher Clash</title>
+  <meta name="description" content="Cipher Clash — Phase 0 static lobby UI (no game logic).">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Luckiest+Guy&family=Nunito:wght@600;800&family=Montserrat:wght@700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/src/index.css">
+  <!-- Boxity / Legion SDK: read-only identity + avatar (js/legion-sdk.js).
+       If it fails to load, the default Legion character and "Player" are used. -->
+  <script src="https://sdk.bloxity.io/v1/legion-sdk.min.js"></script>
+</head>
+<body data-screen="lobby">
+  <!-- 3D lobby world (Three.js). Camera behaviour: js/camera.js -->
+  <canvas id="world-canvas" class="world-canvas" aria-label="Lobby world view. Drag to rotate the camera; scroll, pinch or press I / O to zoom."></canvas>
+  <div class="touch-controls" id="touch-controls" aria-label="Touch controls" hidden>
+    <div class="touch-stick" id="touch-stick" role="group" aria-label="Movement joystick">
+      <span class="touch-stick__thumb" id="touch-stick-thumb" aria-hidden="true"></span>
+    </div>
+    <button class="touch-jump" id="touch-jump" type="button" aria-label="Jump">JUMP</button>
+  </div>
+
+  <!-- ===================== LOBBY HUD (S01 — every frame of the video) ===================== -->
+  <div class="hud" id="hud" data-screen-layer="hud">
+
+    <!-- Left rail -->
+    <div class="hud-left">
+      <button class="hud-gift" id="btn-free-gift" data-action="openFreeGift" aria-label="Free gift (reward available)">
+        <span class="rays" aria-hidden="true"></span>
+        <img class="hud-gift__icon" src="assets/gift.svg" alt="">
+        <span class="hud-gift__badge" aria-hidden="true">!</span>
+        <span class="hud-gift__label stroke-text">FREE GIFT</span>
+      </button>
+      <button class="hud-tile hud-tile--shop" id="btn-shop" data-action="openShop" aria-label="Shop">
+        <img class="hud-tile__icon" src="assets/basket.svg" alt="">
+        <span class="hud-tile__label stroke-text">Shop</span>
+      </button>
+      <button class="hud-tile hud-tile--inventory" id="btn-inventory" data-action="openInventory" aria-label="Inventory">
+        <img class="hud-tile__icon" src="assets/backpack.svg" alt="">
+        <span class="hud-tile__label stroke-text">Inventory</span>
+      </button>
+      <button class="hud-tile hud-tile--index" id="btn-index" data-action="openIndex" aria-label="Index">
+        <img class="hud-tile__icon" src="assets/book.svg" alt="">
+        <span class="hud-tile__label stroke-text">Index</span>
+      </button>
+    </div>
+
+    <!-- Right rail: rotating offers (top slot alternates, bottom slot cycles 3) -->
+    <div class="hud-right">
+      <div class="offer-slot offer-slot--top">
+        <button class="offer" id="offer-2x-cash" data-action="buyOffer" data-arg="2x-cash" aria-label="2x Cash for 35 gems">
+          <span class="rays" aria-hidden="true"></span>
+          <span class="offer__title stroke-text">2x Cash</span>
+          <img class="offer__icon" src="assets/money-bag.svg" alt="">
+          <span class="offer__price stroke-text"><img src="assets/gem.svg" alt="">35</span>
+        </button>
+        <button class="offer" id="offer-2x-wins" data-action="buyOffer" data-arg="2x-wins" aria-label="2x Wins for 75 gems" hidden>
+          <span class="rays" aria-hidden="true"></span>
+          <span class="offer__title stroke-text">2x Wins</span>
+          <img class="offer__icon" src="assets/trophy.svg" alt="">
+          <span class="offer__price stroke-text"><img src="assets/gem.svg" alt="">75</span>
+        </button>
+      </div>
+      <div class="offer-slot offer-slot--bottom">
+        <button class="offer" id="offer-starter" data-action="buyOffer" data-arg="starter-pack" aria-label="Starter Pack for 25 gems">
+          <span class="rays" aria-hidden="true"></span>
+          <span class="offer__title stroke-text">Starter Pack</span>
+          <img class="offer__icon" src="assets/starter-pack.svg" alt="">
+          <span class="offer__price stroke-text"><img src="assets/gem.svg" alt="">25</span>
+        </button>
+        <button class="offer offer--limited" id="offer-fall" data-action="buyOffer" data-arg="fall-pack" aria-label="Limited time Fall Pack for 35 gems" hidden>
+          <span class="rays" aria-hidden="true"></span>
+          <span class="offer__tag">LIMITED TIME</span>
+          <span class="offer__title offer__title--pack stroke-text">FALL PACK</span>
+          <img class="offer__icon" src="assets/pack.svg" alt="">
+          <span class="offer__price stroke-text"><img src="assets/gem.svg" alt="">35</span>
+        </button>
+        <button class="offer" id="offer-limited" data-action="buyOffer" data-arg="limited-pack" aria-label="Limited Pack for 40 gems" hidden>
+          <span class="rays" aria-hidden="true"></span>
+          <span class="offer__title offer__title--small stroke-text">LIMITED PACK</span>
+          <img class="offer__icon" src="assets/pack-limited.svg" alt="">
+          <span class="offer__price stroke-text"><img src="assets/gem.svg" alt="">40</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Bottom -->
+    <button class="btn btn--play" id="btn-play" data-action="joinQueue" aria-label="Play — find a match"><span class="stroke-text" id="btn-play-label">PLAY</span></button>
+
+    <div class="hud-cash" id="hud-cash" aria-label="Cash balance">
+      <img class="hud-cash__icon" src="assets/cash.svg" alt="">
+      <span class="hud-cash__amount" id="cash-amount">0</span>
+    </div>
+
+    <!-- two states seen in the screenshots: "Event In: mm:ss" (waiting) and the EVENT badge (running) -->
+    <div class="hud-event" id="hud-event" data-phase="countdown" role="timer" aria-label="Event starts in 11 minutes 27 seconds">
+      <span class="hud-event__soon">Event In:</span>
+      <span class="hud-event__title">EVENT</span>
+      <img class="hud-event__icon" src="assets/event-badge.svg" alt="">
+      <span class="hud-event__timer" id="event-timer">11:27</span>
+    </div>
+  </div>
+
+  <!-- ===================== SCREENS (all NOT IN VIDEO → placeholder layouts) ===================== -->
+  <section class="screen" data-screen="lobby" hidden></section>
+
+  <section class="screen modal" data-screen="shop" hidden aria-labelledby="shop-title">
+    <div class="modal__panel modal__panel--shop NOT-IN-VIDEO">
+      <header class="modal__head"><h2 id="shop-title" class="modal__title stroke-text">Shop</h2>
+        <button class="btn btn--close" data-action="closeModal" aria-label="Close">✕</button></header>
+      <div class="modal__grid">
+        <div class="shop-card"><img src="assets/money-bag.svg" alt=""><span>2x Cash</span><span class="price"><img src="assets/gem.svg" alt="">35</span></div>
+        <div class="shop-card"><img src="assets/trophy.svg" alt=""><span>2x Wins</span><span class="price"><img src="assets/gem.svg" alt="">75</span></div>
+        <div class="shop-card"><img src="assets/starter-pack.svg" alt=""><span>Starter Pack</span><span class="price"><img src="assets/gem.svg" alt="">25</span></div>
+        <div class="shop-card"><img src="assets/pack.svg" alt=""><span>Fall Pack</span><span class="price"><img src="assets/gem.svg" alt="">35</span></div>
+        <div class="shop-card"><img src="assets/pack-limited.svg" alt=""><span>Limited Pack</span><span class="price"><img src="assets/gem.svg" alt="">40</span></div>
+      </div>
+      <p class="modal__note">NOT IN VIDEO — layout assumed. Prices taken from the HUD offers.</p>
+    </div>
+  </section>
+
+  <section class="screen modal" data-screen="inventory" hidden aria-labelledby="inv-title">
+    <div class="modal__panel modal__panel--inventory NOT-IN-VIDEO">
+      <header class="modal__head"><h2 id="inv-title" class="modal__title stroke-text">Inventory</h2>
+        <button class="btn btn--close" data-action="closeModal" aria-label="Close">✕</button></header>
+      <h3 class="modal__sub">Loadout</h3>
+      <div class="loadout" id="loadout">
+        <button class="token token--ember" data-token="ember" aria-label="Ember token"><span class="token__glyph">▲</span></button>
+        <button class="token token--tide" data-token="tide" aria-label="Tide token"><span class="token__glyph">●</span></button>
+        <button class="token token--bloom" data-token="bloom" aria-label="Bloom token"><span class="token__glyph">✚</span></button>
+        <button class="token token--volt" data-token="volt" aria-label="Volt token"><span class="token__glyph">◆</span></button>
+        <button class="token token--frost" data-token="frost" aria-label="Frost token"><span class="token__glyph">■</span></button>
+        <button class="token token--shade" data-token="shade" aria-label="Shade token"><span class="token__glyph">★</span></button>
+      </div>
+      <p class="modal__note">NOT IN VIDEO — token names, shapes and loadout size are placeholders.</p>
+    </div>
+  </section>
+
+  <section class="screen modal" data-screen="index" hidden aria-labelledby="idx-title">
+    <div class="modal__panel NOT-IN-VIDEO">
+      <header class="modal__head"><h2 id="idx-title" class="modal__title stroke-text">Index</h2>
+        <button class="btn btn--close" data-action="closeModal" aria-label="Close">✕</button></header>
+      <div class="modal__grid modal__grid--index">
+        <div class="index-card rarity--common"><span class="token token--ember"><span class="token__glyph">▲</span></span><span>Ember</span><small>Common</small></div>
+        <div class="index-card rarity--rare"><span class="token token--tide"><span class="token__glyph">●</span></span><span>Tide</span><small>Rare</small></div>
+        <div class="index-card rarity--epic"><span class="token token--volt"><span class="token__glyph">◆</span></span><span>Volt</span><small>Epic</small></div>
+        <div class="index-card rarity--mythic"><span class="token token--shade"><span class="token__glyph">★</span></span><span>Shade</span><small>Mythic</small></div>
+        <div class="index-card index-card--locked"><span class="token token--locked"><span class="token__glyph">?</span></span><span>???</span><small>Locked</small></div>
+      </div>
+      <p class="modal__note">NOT IN VIDEO. "Mythic" rarity is the only rarity name seen (billboard over a player, t=66s).</p>
+    </div>
+  </section>
+
+  <section class="screen modal" data-screen="gift" hidden aria-labelledby="gift-title">
+    <div class="modal__panel modal__panel--small NOT-IN-VIDEO">
+      <header class="modal__head"><h2 id="gift-title" class="modal__title stroke-text">Free Gift</h2>
+        <button class="btn btn--close" data-action="closeModal" aria-label="Close">✕</button></header>
+      <img class="modal__hero" src="assets/gift.svg" alt="">
+      <button class="btn btn--primary" id="btn-claim-gift" aria-label="Claim gift"><span class="stroke-text">CLAIM</span></button>
+      <p class="modal__note">NOT IN VIDEO.</p>
+    </div>
+  </section>
+
+  <section class="screen modal" data-screen="packs" hidden aria-labelledby="packs-title">
+    <div class="modal__panel modal__panel--small NOT-IN-VIDEO">
+      <header class="modal__head"><h2 id="packs-title" class="modal__title stroke-text">Packs</h2>
+        <button class="btn btn--close" data-action="closeModal" aria-label="Close">✕</button></header>
+      <img class="modal__hero pack-hero" src="assets/pack.svg" alt="">
+      <button class="btn btn--primary" id="btn-open-pack" aria-label="Open pack for cash"><span class="stroke-text">OPEN</span></button>
+      <p class="modal__note">NOT IN VIDEO — the stall ("PACKS / Spend Cash Here", prompt "Buy Packs") is visible at t=79–88s, the UI it opens is not.</p>
+    </div>
+  </section>
+
+  <section class="screen modal" data-screen="matchmaking" hidden aria-labelledby="mm-title">
+    <div class="modal__panel modal__panel--small NOT-IN-VIDEO">
+      <h2 id="mm-title" class="modal__title stroke-text">Finding opponent…</h2>
+      <div class="mm-slots">
+        <div class="avatar-slot avatar-slot--me" data-player="me"><span class="avatar-slot__face"></span><span class="avatar-slot__name"></span></div>
+        <span class="mm-vs stroke-text">VS</span>
+        <div class="avatar-slot avatar-slot--opponent avatar-slot--empty" data-player="opponent" data-sample-name="?"><span class="avatar-slot__face"></span><span class="avatar-slot__name"></span></div>
+      </div>
+      <button class="btn btn--secondary" data-action="closeModal" aria-label="Cancel matchmaking"><span class="stroke-text">CANCEL</span></button>
+      <p class="modal__note">NOT IN VIDEO. In the video, matches start by standing on a booth's red / blue pad ("0/2 Players").</p>
+    </div>
+  </section>
+
+  <!-- Match screen. NOT IN VIDEO: built from the game's description + the booth code bar (9 cells). -->
+  <section class="screen screen--game NOT-IN-VIDEO" data-screen="game" hidden aria-label="Match">
+    <header class="match-bar">
+      <div class="avatar-slot avatar-slot--me" data-player="me"><span class="avatar-slot__face"></span><span class="avatar-slot__name"></span><span class="avatar-slot__chip">Lv 1</span></div>
+      <div class="match-bar__center"><span class="match-timer" id="match-timer">1:30</span><span class="match-round">ROUND 1</span></div>
+      <div class="avatar-slot avatar-slot--opponent" data-player="opponent" data-sample-name="emberfox"><span class="avatar-slot__face"></span><span class="avatar-slot__name"></span><span class="avatar-slot__chip">Lv 4</span></div>
+    </header>
+    <div class="boards">
+      <div class="board board--me" aria-label="Your guesses">
+        <div class="guess-row is-done" id="guess-row-1"><span class="token token--ember"><span class="token__glyph">▲</span></span><span class="token token--tide"><span class="token__glyph">●</span></span><span class="token token--bloom"><span class="token__glyph">✚</span></span><span class="token token--volt"><span class="token__glyph">◆</span></span>
+          <span class="pegs"><i class="peg peg--exact"></i><i class="peg peg--misplaced"></i><i class="peg peg--miss"></i><i class="peg peg--miss"></i></span></div>
+        <div class="guess-row is-done" id="guess-row-2"><span class="token token--ember"><span class="token__glyph">▲</span></span><span class="token token--frost"><span class="token__glyph">■</span></span><span class="token token--tide"><span class="token__glyph">●</span></span><span class="token token--shade"><span class="token__glyph">★</span></span>
+          <span class="pegs"><i class="peg peg--exact"></i><i class="peg peg--exact"></i><i class="peg peg--misplaced"></i><i class="peg peg--miss"></i></span></div>
+        <div class="guess-row is-active" id="guess-row-3"><span class="slot slot--filled token token--ember"><span class="token__glyph">▲</span></span><span class="slot"></span><span class="slot"></span><span class="slot"></span>
+          <span class="pegs"><i class="peg"></i><i class="peg"></i><i class="peg"></i><i class="peg"></i></span></div>
+        <div class="guess-row" id="guess-row-4"><span class="slot"></span><span class="slot"></span><span class="slot"></span><span class="slot"></span><span class="pegs"><i class="peg"></i><i class="peg"></i><i class="peg"></i><i class="peg"></i></span></div>
+      </div>
+      <div class="board board--opponent" aria-label="Opponent progress">
+        <div class="code-bar"><span class="code-bar__cell is-hidden">?</span><span class="code-bar__cell is-hidden">?</span><span class="code-bar__cell is-hidden">?</span><span class="code-bar__cell is-hidden">?</span></div>
+        <p class="opp-status">emberfox is guessing! <b>2</b> guesses</p>
+      </div>
+    </div>
+    <div class="palette" aria-label="Your loadout">
+      <button class="token token--ember" data-token="ember" data-action="placeTokenInSlot" data-arg="ember" aria-label="Place Ember"><span class="token__glyph">▲</span></button>
+      <button class="token token--tide" data-token="tide" data-action="placeTokenInSlot" data-arg="tide" aria-label="Place Tide"><span class="token__glyph">●</span></button>
+      <button class="token token--bloom" data-token="bloom" data-action="placeTokenInSlot" data-arg="bloom" aria-label="Place Bloom"><span class="token__glyph">✚</span></button>
+      <button class="token token--volt" data-token="volt" data-action="placeTokenInSlot" data-arg="volt" aria-label="Place Volt"><span class="token__glyph">◆</span></button>
+      <button class="token token--frost" data-token="frost" data-action="placeTokenInSlot" data-arg="frost" aria-label="Place Frost"><span class="token__glyph">■</span></button>
+      <button class="token token--shade" data-token="shade" data-action="placeTokenInSlot" data-arg="shade" aria-label="Place Shade"><span class="token__glyph">★</span></button>
+      <button class="btn btn--submit" id="btn-submit" data-action="submitGuess" aria-label="Submit guess"><span class="stroke-text">CHECK</span></button>
+    </div>
+  </section>
+
+
+  <!-- Daily Rewards (screenshot 1). Opened from the top-right calendar button. -->
+  <section class="screen modal" data-screen="daily" hidden aria-labelledby="daily-title">
+    <div class="daily" role="dialog">
+      <header class="daily__head">
+        <span class="daily__cal" aria-hidden="true"><span>31</span></span>
+        <h2 id="daily-title" class="daily__title stroke-text">Daily Rewards</h2>
+        <button class="daily__claim-all" id="btn-claim-all" data-action="claimAllDaily" aria-label="Claim all days for 85 gems">
+          <span class="stroke-text">CLAIM ALL</span>
+          <span class="daily__only stroke-text">ONLY <img src="assets/gem.svg" alt="">85</span>
+        </button>
+        <button class="daily__close stroke-text" data-action="closeModal" aria-label="Close">X</button>
+      </header>
+      <div class="daily__grid">
+        <div class="day day--1" id="daily-day-1"><span class="day__n stroke-text">DAY 1</span><img class="day__icon" src="assets/pack.svg" alt=""><span class="day__reward stroke-text">+1 Cipher Pack</span><button class="day__btn day__btn--claim" data-action="claimDaily" data-arg="1"><span class="stroke-text">CLAIM</span></button></div>
+        <div class="day day--2" id="daily-day-2"><span class="day__n stroke-text">DAY 2</span><img class="day__icon" src="assets/cash.svg" alt=""><span class="day__reward stroke-text">+750 Cash</span><button class="day__btn" disabled><span class="stroke-text">LOCKED</span></button></div>
+        <div class="day day--3" id="daily-day-3"><span class="day__n stroke-text">DAY 3</span><img class="day__icon" src="assets/pack-limited.svg" alt=""><span class="day__reward stroke-text">+1 Token Pack</span><button class="day__btn" disabled><span class="stroke-text">LOCKED</span></button></div>
+        <div class="day day--7" id="daily-day-7"><span class="day__n day__n--big stroke-text">DAY 7</span><span class="day__mystery PLACEHOLDER" aria-hidden="true">?</span><span class="day__reward day__reward--big stroke-text">Cipher Crown</span><span class="day__rarity stroke-text">Legendary</span><button class="day__btn day__btn--big" disabled><span class="stroke-text">LOCKED</span></button></div>
+        <div class="day day--4" id="daily-day-4"><span class="day__n stroke-text">DAY 4</span><img class="day__icon" src="assets/cash.svg" alt=""><span class="day__reward stroke-text">+1.5K Cash</span><button class="day__btn" disabled><span class="stroke-text">LOCKED</span></button></div>
+        <div class="day day--5" id="daily-day-5"><span class="day__n stroke-text">DAY 5</span><img class="day__icon" src="assets/starter-pack.svg" alt=""><span class="day__reward stroke-text">+1 Shop Pack</span><button class="day__btn" disabled><span class="stroke-text">LOCKED</span></button></div>
+        <div class="day day--6" id="daily-day-6"><span class="day__n stroke-text">DAY 6</span><img class="day__icon" src="assets/money-bag.svg" alt=""><span class="day__reward stroke-text">+3K Cash</span><button class="day__btn" disabled><span class="stroke-text">LOCKED</span></button></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="screen modal" data-screen="result" hidden aria-labelledby="result-title">
+    <div class="modal__panel modal__panel--small NOT-IN-VIDEO">
+      <h2 id="result-title" class="result-title result-title--win stroke-text">YOU WIN!</h2>
+      <div class="mm-slots">
+        <div class="avatar-slot avatar-slot--me avatar-slot--winner" data-player="me"><span class="avatar-slot__face"></span><span class="avatar-slot__name"></span></div>
+        <div class="avatar-slot avatar-slot--opponent" data-player="opponent" data-sample-name="emberfox"><span class="avatar-slot__face"></span><span class="avatar-slot__name"></span></div>
+      </div>
+      <p class="result-reward"><img src="assets/cash.svg" alt=""> +25</p>
+      <div class="result-actions">
+        <button class="btn btn--primary" data-action="rematch" aria-label="Rematch"><span class="stroke-text">REMATCH</span></button>
+        <button class="btn btn--secondary" data-action="closeModal" aria-label="Back to lobby"><span class="stroke-text">LOBBY</span></button>
+      </div>
+      <p class="modal__note">NOT IN VIDEO.</p>
+    </div>
+  </section>
+
+
+  <script type="module" src="/src/main.jsx"></script>
+</body>
+</html>
