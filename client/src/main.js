@@ -1,6 +1,7 @@
 // Cipher Clash client entry. Renders the lobby, player presence, and booth matches.
 import * as THREE from 'three';
-import { buildWorld, tickWorld, BILLBOARDS, WORLD, CONVEYORS, CONVEYOR_SPEED } from './scene/world.js';
+import { buildWorld, tickWorld, BILLBOARDS, WORLD, CONVEYORS, CONVEYOR_SPEED, DANCE_SPOTS } from './scene/world.js';
+import { createDancers } from './scene/dancers.js';
 import { createSky } from './scene/sky.js';
 import { moveCharacter, cameraClearance } from './scene/physics.js';
 import { createPost, lowPowerDevice } from './effects/post.js';
@@ -52,6 +53,7 @@ startLegion();
 await document.fonts.ready; // billboards are drawn to canvas with web fonts
 await Promise.all(["400 40px 'Luckiest Guy'", "700 40px 'Fredoka'", "600 40px 'Fredoka'", "900 40px 'Montserrat'", "800 40px 'Montserrat'"].map(f => document.fonts.load(f).catch(() => {})));
 buildWorld(scene);
+const dancers = createDancers(scene, DANCE_SPOTS);
 
 // --- your Legion character (skin + equipped parts from Legion.SDK) ---
 const me = new LegionCharacter({});
@@ -277,6 +279,7 @@ renderer.setAnimationLoop(() => {
     b.getWorldPosition(wp);
     b.material.opacity = THREE.MathUtils.smoothstep(wp.distanceTo(camera.position), 16, 36);
   }
+  dancers.update(dt, camera);
   post.render();
 
   // adaptive resolution: average frame time over ~1 s, step pixel ratio by 0.15

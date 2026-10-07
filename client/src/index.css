@@ -486,12 +486,6 @@ body[data-match="voting"] .hud-left, body[data-match="building"] .hud-left { dis
 /* top: "NAME's turn... 20s" */
 .mm-turn { left: 50%; top: calc(10 * var(--u)); transform: translateX(-50%); font: 900 calc(50 * var(--u)) / 1.1 var(--f-match); color: #fff; white-space: nowrap; }
 
-/* chat banner: "NAME: Is It X?" / "No, no, no!" */
-.mm-banner { left: 50%; top: calc(140 * var(--u)); transform: translateX(-50%); min-width: calc(760 * var(--u)); justify-content: center; padding: calc(10 * var(--u)) calc(30 * var(--u));
-  background: rgba(60, 60, 64, .32); font: 800 calc(44 * var(--u)) / 1.15 var(--f-match); color: #fff; white-space: nowrap; }
-.mm-banner span { -webkit-text-stroke: calc(4 * var(--u)) #111; paint-order: stroke fill; }
-.mm-banner.is-wrong { color: #ff2a2a; font-size: calc(50 * var(--u)); }
-.mm-banner.is-correct { color: #3cff2a; font-size: calc(50 * var(--u)); }
 
 .mm-toast { left: 50%; top: 40%; transform: translateX(-50%); font: 900 calc(40 * var(--u)) / 1 var(--f-match); color: #fff; }
 .mm-result { inset: 0; flex-direction: column; align-items: center; justify-content: center; gap: calc(12 * var(--u)); background: rgba(0,0,0,.25); }
@@ -506,10 +500,8 @@ body[data-match="voting"] .hud-left, body[data-match="building"] .hud-left { dis
 .mm-reveal { top: calc(31% - 205 * var(--u)); }
 .mm-submit { top: calc(31% + 110 * var(--u)); }
 .mm-repeat { top: calc(31% - 60 * var(--u)); }
-.mm-banner { top: calc(96 * var(--u)); }
 
 /* spectator panel: both players' cracked objects, whose turn it is, and the queue */
-body[data-match="watching"] .mm-banner { top: auto; bottom: calc(40 * var(--u)); max-width: calc(100vw - 32px); min-width: 0; }
 .mm-watch { left: 16px; top: 16px; flex-direction: column; align-items: stretch; gap: calc(10 * var(--u));
   width: min(calc(100vw - 32px), calc(600 * var(--u))); padding: calc(14 * var(--u)) calc(18 * var(--u));
   background: rgba(16, 20, 28, .72); border: calc(4 * var(--u)) solid #111; border-radius: calc(12 * var(--u)); color: #fff; }

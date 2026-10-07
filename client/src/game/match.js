@@ -74,7 +74,6 @@ function buildUI() {
   ui.buildOk = el('button', 'mm-btn mm-btn--green', buildActions, 'CONFIRM');
 
   ui.turn = el('div', 'mm-turn stroke-text', root);
-  ui.banner = el('div', 'mm-banner', root);
 
   ui.reveal = el('button', 'mm-reveal', root);
   gemPrice(el('span', 'mm-reveal__price stroke-text', ui.reveal), 'ONLY', 4);
@@ -112,6 +111,27 @@ function nameTag(text) {
   g.fillStyle = 'rgba(255,255,255,.85)'; g.fillText(text, 128, 32);
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
   const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, transparent: true, depthWrite: false })); s.scale.set(4, 1, 1); return s;
+}
+// Speech bubble above a character's head: the guesser asks "Is It X?" and hears "Correct!";
+// on a miss the pattern's owner (the opponent) answers "No, no, no!".
+const BUBBLE_TEXT = { ask: '#111111', correct: '#16a523', wrong: '#e8141f' };
+function bubbleSprite(text, kind) {
+  const c = document.createElement('canvas'); c.width = 640; c.height = 200;
+  const g = c.getContext('2d');
+  g.font = "900 64px 'Montserrat', 'Fredoka'";
+  const w = Math.min(620, g.measureText(text).width + 70), x = (640 - w) / 2;
+  g.beginPath(); g.roundRect(x, 8, w, 130, 34);
+  g.moveTo(296, 136); g.lineTo(320, 190); g.lineTo(344, 136);
+  g.fillStyle = '#ffffff'; g.fill();
+  g.lineWidth = 8; g.strokeStyle = '#111111'; g.lineJoin = 'round'; g.stroke();
+  g.fillStyle = '#ffffff'; g.fillRect(300, 128, 40, 12);      // hide the outline where the tail joins the body
+  g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = BUBBLE_TEXT[kind] || BUBBLE_TEXT.ask;
+  g.fillText(text, 320, 75, w - 40);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  // drawn on top of walls so you always see who is talking
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, transparent: true, depthTest: false, depthWrite: false, fog: false }));
+  s.center.set(0.5, 0); s.scale.set(11.2, 3.5, 1); s.renderOrder = 40; s.userData.say = text;
+  return s;
 }
 function guideBox() {   // translucent green box marking the next slot (screenshots 66, 74)
   const g = new THREE.Group(), s = TOKEN_SIZE + 0.4;
@@ -184,7 +204,6 @@ export function createMatchSystem({ scene, camera, me, feet, state, getName, mul
     show(ui.turn, phase === 'playing');
     show(ui.watch, phase === 'watching');
     if (phase !== 'playing') [ui.guess, ui.submit, ui.repeat, ui.troll, ui.reveal].forEach(e => show(e, false));
-    if (phase !== 'playing' && phase !== 'watching') show(ui.banner, false);
   }
   function toast(text) {
     ui.toast.textContent = text; show(ui.toast, true);
@@ -517,12 +536,27 @@ export function createMatchSystem({ scene, camera, me, feet, state, getName, mul
     return choice;
   }
 
-  function sayBanner(name, nameColor, text) {
-    ui.banner.replaceChildren(); ui.banner.className = 'mm-banner is-on';
-    if (name) { const n = el('span', 'mm-banner__name', ui.banner, name + ': '); n.style.color = nameColor; }
-    el('span', 'mm-banner__text', ui.banner, text);
+  // speech bubbles over heads; one per character, replaced by the next line it says
+  const bubbles = [];
+  function hush(char) {
+    for (const b of bubbles) if (b.char === char) b.ttl = 0;
+    updateBubbles(0);
   }
-  function bannerBig(text, cls) { ui.banner.replaceChildren(); ui.banner.className = `mm-banner is-on ${cls}`; el('span', 'mm-banner__text', ui.banner, text); }
+  function say(char, text, kind = 'ask', ttl = 2) {
+    if (!char) return;
+    hush(char);
+    const sprite = bubbleSprite(text, kind); sprite.position.y = 8.4;
+    char.root.add(sprite);
+    bubbles.push({ char, sprite, ttl });
+  }
+  function updateBubbles(dt) {
+    for (let i = bubbles.length - 1; i >= 0; i--) {
+      const b = bubbles[i];
+      if ((b.ttl -= dt) > 0) continue;
+      b.char.root.remove(b.sprite); b.sprite.material.map.dispose(); b.sprite.material.dispose();
+      bubbles.splice(i, 1);
+    }
+  }
 
   // carry the object to the next slot, ask, reveal → returns true if the player keeps guessing
   async function place(myGen, p, id, networkCorrect = null) {
@@ -530,7 +564,7 @@ export function createMatchSystem({ scene, camera, me, feet, state, getName, mul
     // walk to the slot column on the deck holding the object
     const held = tokenMesh(id, TOKEN_SIZE); held.rotation.y = Math.PI / 2; p.half.group.add(held);
     p.held = held; p.walkTo = new THREE.Vector3(DECK_X, DECK_Y, SLOT_Z(slot));
-    sayBanner(p.name, p.nameColor, prev === id ? `Another ${TOKEN[id].name}?` : `Is It ${TOKEN[id].name}?`);
+    say(p.char, prev === id ? `Another ${TOKEN[id].name}?` : `Is It ${TOKEN[id].name}?`, 'ask', 15);
     while (p.walkTo) { await wait(0.05); if (myGen !== gen) return false; }
     // drop it into the green box on the ledge (short arc)
     p.held = null;
@@ -544,14 +578,15 @@ export function createMatchSystem({ scene, camera, me, feet, state, getName, mul
     if (networkMatch ? networkCorrect : p.target[slot] === id) {
       p.revealed[slot] = id; p.placed[slot] = held; p.idx++;
       syncBar(p);
-      bannerBig('Correct!', 'is-correct');
+      say(p.char, 'Correct!', 'correct');
       M.lastWasCorrect = true;
       if (p.idx >= PATTERN_LENGTH) { await finish(myGen, p); return false; }
       await wait(0.9);
       return true;
     }
     p.wrong[slot].add(id);
-    bannerBig('No, no, no!', 'is-wrong');
+    hush(p.char);
+    say(other(p).char, 'No, no, no!', 'wrong');
     for (let s = 1; s > 0; s -= 0.1) { held.scale.setScalar(Math.max(0.01, s)); await wait(0.03); }
     p.half.group.remove(held);
     await wait(0.9);
@@ -622,12 +657,7 @@ export function createMatchSystem({ scene, camera, me, feet, state, getName, mul
     else if (say) view.station.sign.set('IN PROGRESS', C_PROGRESS, `${say.name}: ${say.text}`);
     else if (view.turn) view.station.sign.set('IN PROGRESS', C_PROGRESS, `${view.turn.name} is guessing!`);
     else view.station.sign.set('IN PROGRESS', C_PROGRESS, `${red.name} vs ${blue.name}`);
-    if (watchId === view.station.id) {
-      if (!say) show(ui.banner, false);
-      else if (say.big) bannerBig(say.big, say.cls);
-      else sayBanner(say.name, SIDE_COLOR[say.color], say.text);
-      renderWatch();
-    }
+    if (watchId === view.station.id) renderWatch();
   }
   function syncView(station, info) {
     const live = info.inProgress && !info.bot && info.players?.red && info.players?.blue;
@@ -663,6 +693,7 @@ export function createMatchSystem({ scene, camera, me, feet, state, getName, mul
       const p = viewPlayer(view, ev.playerId);
       view.turn = viewPlayer(view, ev.nextTurnId);
       view.say = p ? { name: p.name, color: p.color, text: 'Out of time!' } : null; viewChanged(view);
+      if (p) say(getRemoteCharacter?.(p.id), 'Out of time!', 'ask', 1.5);
       await vwait(1); if (!alive()) return;
       view.say = null; viewChanged(view);
       return;
@@ -677,6 +708,8 @@ export function createMatchSystem({ scene, camera, me, feet, state, getName, mul
     p.half.group.add(held); p.held = held; p.carrying = true;
     view.say = { name: p.name, color: p.color, text: prev === ev.tokenId ? `Another ${TOKEN[ev.tokenId].name}?` : `Is It ${TOKEN[ev.tokenId].name}?` };
     viewChanged(view);
+    const asker = getRemoteCharacter?.(p.id);
+    say(asker, view.say.text, 'ask', 15);
     await vwait(1.1); if (!alive()) return;
     p.carrying = false;
     const from = held.position.clone(), to = new THREE.Vector3(LEDGE_X, LEDGE_Y + TOKEN_SIZE / 2, SLOT_Z(slot));
@@ -689,9 +722,12 @@ export function createMatchSystem({ scene, camera, me, feet, state, getName, mul
       p.revealed[slot] = ev.tokenId; p.placed[slot] = held; p.held = null;
       showProgress(p, p.revealed);
       view.say = { big: 'Correct!', cls: 'is-correct' };
+      say(asker, 'Correct!', 'correct');
     } else {
       p.misses++;
       view.say = { big: 'No, no, no!', cls: 'is-wrong' };
+      hush(asker);
+      say(getRemoteCharacter?.(viewOther(view, p).id), 'No, no, no!', 'wrong');
     }
     viewChanged(view);
     if (!ev.correct) {
@@ -916,6 +952,7 @@ export function createMatchSystem({ scene, camera, me, feet, state, getName, mul
     update(dt) {
       for (let i = timers.length - 1; i >= 0; i--) { const t = timers[i]; t.t -= dt; if (t.t <= 0) { timers.splice(i, 1); t.r(); } }
       for (let i = vtimers.length - 1; i >= 0; i--) { const t = vtimers[i]; t.t -= dt; if (t.t <= 0) { vtimers.splice(i, 1); t.r(); } }
+      updateBubbles(dt);
       animateViews();
       // prompt near a booth pad: join the queue at a free booth, watch a live one
       const prevAction = nearPad?.action;

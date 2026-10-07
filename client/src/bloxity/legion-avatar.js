@@ -9,6 +9,8 @@
 //   jump  : arms raised overhead, legs straight, hop arc                   [t=70–72s, NPC]
 //   airborne: same arms-up pose while your own character is in the air (Roblox R6 default)
 //   cheer : both arms up (leaderboard statues)                             [t=72–74s]
+//   dance : leaderboard pedestal dancers; driven by the shared clock so every dancer
+//           (and every player's screen) moves in step
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
@@ -61,7 +63,7 @@ export class LegionCharacter {
   constructor(opts = {}) {
     this.root = new THREE.Group();            // positioned / rotated by the world
     this.root.userData.class = 'avatar-3d legion-character';
-    this.state = 'idle';                      // idle | walk | jump | cheer
+    this.state = 'idle';                      // idle | walk | jump | cheer | dance
     this.phase = Math.random() * 10;
     this.blend = 0;                           // 0 = idle, 1 = walk (smoothed)
     this.ready = false;
@@ -95,6 +97,7 @@ export class LegionCharacter {
     const s = AVATAR_HEIGHT / (box.max.y - box.min.y);
     model.scale.setScalar(s);
     model.position.y = -box.min.y * s;
+    this.modelY = model.position.y;
     this.model = model;
     this.root.add(model);
     this.ready = true;
@@ -164,6 +167,17 @@ export class LegionCharacter {
     for (const k in B) { B[k].bone.quaternion.copy(B[k].q); B[k].bone.position.copy(B[k].p); }
     const rot = (name, axis, a) => { const b = B[name]; if (b) b.bone.quaternion.multiply(tmpQ.setFromAxisAngle(axis, a)); };
 
+    if (this.state === 'dance') {
+      // two steps per second: arms pump overhead in turn, hips sway, a small bounce on each beat
+      const beat = (performance.now() / 1000) * Math.PI * 2, s = Math.sin(beat);
+      this.model.position.y = this.modelY + Math.abs(Math.sin(beat)) * 0.35;
+      // negative X swings the arms forward (toward the viewer), positive would go behind the head
+      rot('ArmL_Offset', X_AXIS, -(1.9 + s * 0.75)); rot('ArmR_Offset', X_AXIS, -(1.9 - s * 0.75));
+      rot('LegL_Offset', X_AXIS, s * 0.35); rot('LegR_Offset', X_AXIS, -s * 0.35);
+      rot('Spine1', Z_AXIS, Math.sin(beat / 2) * 0.16);
+      rot('Neck1', Z_AXIS, -Math.sin(beat / 2) * 0.12);
+      return;
+    }
     if (this.state === 'cheer') {                      // leaderboard statues: arms up, slow wave
       const w = Math.sin(t * 2.2) * 0.12;
       rot('ArmL_Offset', X_AXIS, Math.PI * 0.92 + w); rot('ArmR_Offset', X_AXIS, Math.PI * 0.92 - w);
