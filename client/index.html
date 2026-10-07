@@ -182,8 +182,13 @@
         <span class="mm-vs stroke-text">VS</span>
         <div class="avatar-slot avatar-slot--opponent avatar-slot--empty" data-player="opponent" data-sample-name="?"><span class="avatar-slot__face"></span><span class="avatar-slot__name"></span></div>
       </div>
+      <p class="mm-queue-status" id="mm-queue-status" role="status" aria-live="polite">Joining queue…</p>
+      <div class="mm-queue-actions">
+        <button class="btn btn--primary" id="mm-watch" type="button" hidden><span class="stroke-text">WATCH LIVE</span></button>
+        <button class="btn btn--primary" id="mm-play-bot" type="button"><span class="stroke-text">PLAY VS. BOT</span></button>
+      </div>
       <button class="btn btn--secondary" data-action="closeModal" aria-label="Cancel matchmaking"><span class="stroke-text">CANCEL</span></button>
-      <p class="modal__note">NOT IN VIDEO. In the video, matches start by standing on a booth's red / blue pad ("0/2 Players").</p>
+      <p class="modal__note">You go straight into a booth where a player is already waiting; otherwise the server picks two queued players at random for each free booth. You can also press Join Game on any free booth pad. You stay in the queue while you watch a live match.</p>
     </div>
   </section>
 

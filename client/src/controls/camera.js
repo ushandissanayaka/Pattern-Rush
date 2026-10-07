@@ -7,11 +7,10 @@
 //   Touch      : one-finger drag on the world = orbit, two-finger pinch = zoom
 //   Keyboard   : I / O = zoom, , / . = orbit
 //
-// Orbit target = avatar head. FOV 70°, zoom 0.5 (first person) .. 400 studs —
-// the same ranges seen in the reference video.
+// Orbit target = avatar head. FOV 70°, zoom 0.5 (first person) .. 100 studs.
 import * as THREE from 'three';
 
-export const CAMERA_LIMITS = { minDist: 0.5, maxDist: 190, minPitch: -80, maxPitch: 80, fov: 70, headHeight: 4.5 };
+export const CAMERA_LIMITS = { minDist: 0.5, maxDist: 100, minPitch: -80, maxPitch: 80, fov: 70, headHeight: 4.5 };
 // Start framing: behind the avatar, looking down the road toward the castle.
 export const CAMERA_START = { yaw: 0, pitch: 15, dist: 22 };
 

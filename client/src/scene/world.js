@@ -32,7 +32,7 @@ const ACTORS = [];
 export const BILLBOARDS = [];
 // Conveyor strips (chevron road): { minX, maxX, minZ, maxZ, dx, dz } — main.js pushes the player.
 export const CONVEYORS = [];
-// Playing places: { id, side, z, red: { z }, blue: { z }, sign } — for the match logic later.
+// Playing places: { id, side, z, red, blue, sign } — two-player stations.
 export const STATIONS = [];
 export const CONVEYOR_SPEED = 14;   // studs / s, a little slower than walking (16)
 export function tickWorld(dt, camera) { for (const a of ACTORS) a(dt, camera); }
