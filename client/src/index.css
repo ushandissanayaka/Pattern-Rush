@@ -765,3 +765,34 @@ body[data-match="voting"] .hud-left, body[data-match="building"] .hud-left { dis
 /* waiting on a booth pad for an opponent */
 .mm-wait { left: 50%; bottom: calc(120 * var(--u)); transform: translateX(-50%); flex-direction: column; align-items: center; gap: calc(10 * var(--u)); }
 .mm-wait__hint { margin: 0; font: 800 calc(22 * var(--u)) / 1 var(--f-match); color: #fff; -webkit-text-stroke-width: calc(4 * var(--u)) !important; }
+
+/* ===================== LOADING SCREEN ===================== */
+/* Blurred key art (a Legion character in a booth, red arrow, token-coloured code bar) behind a dark
+   card with the game icon, title and creator; status at the bottom. The art is pre-blurred, so the
+   page costs no blur work while the game loads; the gradient shows until the image arrives. */
+.loading { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 0 16px;
+  background: url('/assets/loading-bg.jpg') center / cover no-repeat,
+    linear-gradient(180deg, #d9edf7 0%, #eef6fa 60%, #c9d5d9 100%);
+  transition: opacity .55s ease; font-family: var(--f-body); color: #fff; }
+.loading.is-done { opacity: 0; pointer-events: none; }
+.loading__card { position: relative; width: min(1124px, 100%); min-height: clamp(220px, 29vh, 292px);
+  margin-top: clamp(64px, 12.8vh, 128px); padding: clamp(118px, 18vh, 168px) 24px clamp(28px, 4.5vh, 44px);
+  box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+  gap: clamp(18px, 3.6vh, 34px); background: rgba(56, 58, 62, .9); border-radius: 8px; text-align: center; }
+.loading__icon { position: absolute; left: 50%; top: 0; transform: translate(-50%, -50%);
+  width: clamp(150px, 25.6vh, 256px); height: auto; aspect-ratio: 1; border-radius: 8px; box-shadow: 0 6px 18px rgba(0, 0, 0, .25); }
+.loading__title { margin: 0; font: 800 clamp(22px, 3.1vh, 31px) / 1.15 var(--f-body); letter-spacing: .005em; }
+.loading__creator { margin: 0; font: 600 clamp(14px, 1.8vh, 18px) / 1.2 var(--f-body); color: #d9dadd; }
+.loading__status { position: absolute; left: 0; right: 0; bottom: 10px; margin: 0; text-align: center;
+  font: 600 11px / 1.2 var(--f-body); color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, .45); }
+
+/* sound on / off — top-right corner, Roblox-style dark round button */
+.hud-sound { top: calc(18 * var(--u)); right: calc(18 * var(--u)); width: max(40px, calc(62 * var(--u))); height: max(40px, calc(62 * var(--u)));
+  display: grid; place-items: center; padding: 0; border: calc(3 * var(--u)) solid rgba(255, 255, 255, .85); border-radius: 50%;
+  background: rgba(20, 24, 32, .55); cursor: pointer; transition: transform .15s var(--ease-pop), background .15s; }
+.hud-sound:hover { transform: scale(1.08); background: rgba(20, 24, 32, .7); }
+.hud-sound svg { width: 62%; height: 62%; fill: none; stroke: #fff; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.hud-sound__speaker { fill: #fff; }
+.hud-sound__off { display: none; stroke: #ff5a5a; }
+.hud-sound.is-muted .hud-sound__waves { display: none; }
+.hud-sound.is-muted .hud-sound__off { display: inline; }

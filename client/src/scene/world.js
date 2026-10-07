@@ -483,20 +483,23 @@ function rainbowSign(lead, hot, worldHeight) {
   const c = document.createElement('canvas'), g = c.getContext('2d');
   const font = "700 64px 'Fredoka'";
   g.font = font; const wLead = g.measureText(lead).width, wHot = g.measureText(hot).width;
-  c.width = Math.ceil(wLead + wHot + 40); c.height = 96;
-  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+  const width = Math.ceil(wLead + wHot + 40), height = 96;
   const hues = ['#b45cff', '#2fb6ff', '#3be05a', '#ffe83a', '#ffb21e', '#ff3b3b'];
-  const draw = (k) => {
-    g.clearRect(0, 0, c.width, c.height); g.font = font; g.textBaseline = 'middle'; g.lineJoin = 'round'; g.lineWidth = 10; g.strokeStyle = '#000';
-    let x = 20; const y = c.height / 2;
-    [...(lead + hot)].forEach((ch, i) => { g.strokeText(ch, x, y); g.fillStyle = hues[Math.floor((i + k) / 3) % hues.length]; g.fillText(ch, x, y); x += g.measureText(ch).width; });
-    tex.needsUpdate = true;
-  };
-  draw(0);
-  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthWrite: false, transparent: true, fog: false }));
-  sp.scale.set(worldHeight * c.width / c.height, worldHeight, 1); sp.renderOrder = 10; BILLBOARDS.push(sp);
+  // The colours shift one letter every 0.12 s and repeat after hues × 3 steps. Each step is drawn
+  // once up front; animating then only swaps textures instead of re-uploading a canvas 8×/s.
+  const frames = Array.from({ length: hues.length * 3 }, (_, k) => {
+    const fc = document.createElement('canvas'); fc.width = width; fc.height = height;
+    const fg = fc.getContext('2d');
+    fg.font = font; fg.textBaseline = 'middle'; fg.lineJoin = 'round'; fg.lineWidth = 10; fg.strokeStyle = '#000';
+    let x = 20; const y = height / 2;
+    [...(lead + hot)].forEach((ch, i) => { fg.strokeText(ch, x, y); fg.fillStyle = hues[Math.floor((i + k) / 3) % hues.length]; fg.fillText(ch, x, y); x += fg.measureText(ch).width; });
+    const t = new THREE.CanvasTexture(fc); t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  });
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: frames[0], depthWrite: false, transparent: true, fog: false }));
+  sp.scale.set(worldHeight * width / height, worldHeight, 1); sp.renderOrder = 10; BILLBOARDS.push(sp);
   let acc = 0, k = 0;
-  ACTORS.push((dt) => { acc += dt; if (acc > 0.12) { acc = 0; draw(++k); } });
+  ACTORS.push((dt) => { acc += dt; if (acc > 0.12) { acc = 0; sp.material.map = frames[++k % frames.length]; } });
   return sp;
 }
 function bridgeChallenge(parent) {
@@ -527,7 +530,19 @@ function leaderboard(title, icon, valueColor, rows, x, countdownStart, parent) {
   const g = new THREE.Group();
   const cnv = document.createElement('canvas'); cnv.width = 512; cnv.height = 620;
   const tex = new THREE.CanvasTexture(cnv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
-  const draw = (secs) => {
+  // The board is drawn once. The "Updating In: Ns" countdown lives on its own small strip so the
+  // per-second update uploads 512×52 pixels instead of the whole 512×620 board.
+  const FOOT = 52;
+  const foot = document.createElement('canvas'); foot.width = cnv.width; foot.height = FOOT;
+  const footTex = new THREE.CanvasTexture(foot); footTex.colorSpace = THREE.SRGBColorSpace; footTex.anisotropy = 8;
+  const drawFooter = (secs) => {
+    const c = foot.getContext('2d');
+    c.fillStyle = C.lbPanel; c.fillRect(0, 0, foot.width, FOOT);
+    c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = '#d9dee8'; c.font = "700 26px 'Fredoka'";
+    c.fillText(`Updating In: ${secs}s`, foot.width / 2, FOOT / 2);
+    footTex.needsUpdate = true;
+  };
+  const draw = () => {
     const c = cnv.getContext('2d'), w = cnv.width, h = cnv.height;
     c.fillStyle = C.lbPanel; c.fillRect(0, 0, w, h);
     c.font = "700 44px 'Fredoka'"; c.textAlign = 'center'; c.textBaseline = 'middle';
@@ -546,18 +561,19 @@ function leaderboard(title, icon, valueColor, rows, x, countdownStart, parent) {
       c.textAlign = 'right'; c.fillStyle = valueColor; c.font = "700 40px 'Fredoka'"; c.fillText(r[1], w - 46, y + 2);
     });
     c.fillStyle = '#3a4152'; c.fillRect(w - 24, 108, 8, 120);               // scrollbar
-    c.textAlign = 'center'; c.fillStyle = '#d9dee8'; c.font = "700 26px 'Fredoka'";
-    c.fillText(`Updating In: ${secs}s`, w / 2, h - 26);
     tex.needsUpdate = true;
   };
-  let secs = countdownStart, acc = 0; draw(secs);
-  ACTORS.push((dt) => { acc += dt; if (acc >= 1) { acc -= 1; secs = secs <= 0 ? 60 : secs - 1; draw(secs); } });
+  let secs = countdownStart, acc = 0; draw(); drawFooter(secs);
+  ACTORS.push((dt) => { acc += dt; if (acc >= 1) { acc -= 1; secs = secs <= 0 ? 60 : secs - 1; drawFooter(secs); } });
 
   const frameMat = texturedMat(C.lbFrameA, C.lbFrameB, 5, 6);
   const board = new THREE.Group();
   box(22, 26, 1.6, frameMat, 0, 0, 0, board);
   const panel = new THREE.Mesh(new THREE.PlaneGeometry(18.6, 22.5), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false }));
   panel.position.z = 0.82; board.add(panel);
+  const PANEL_H = 22.5, footH = PANEL_H * FOOT / cnv.height;             // footer strip over the bottom of the panel
+  const footer = new THREE.Mesh(new THREE.PlaneGeometry(18.6, footH), new THREE.MeshBasicMaterial({ map: footTex, toneMapped: false }));
+  footer.position.set(0, -PANEL_H / 2 + footH / 2, 0.83); footer.userData.dynamic = true; board.add(footer);
   const nG = neon(C.lbNeon, 1.2);   // neon green edge glow (right + top)
   box(0.7, 26.6, 0.7, nG, 11.2, 0, -0.6, board, false); box(22.4, 0.7, 0.7, nG, 0, 13.2, -0.6, board, false);
   board.position.y = 16; board.rotation.x = -0.08; g.add(board);

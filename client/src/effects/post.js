@@ -6,11 +6,16 @@
 // Low-power devices skip post-processing entirely.
 // The glow is a wide blur, so its mip chain runs at half the usual bloom resolution
 // (a quarter of the screen); that looks the same and is the biggest GPU saving.
+// Lite mode (setLite, chosen by main.js when frames stay slow): 4× MSAA on the half-float scene
+// buffer is by far the most expensive step on integrated GPUs, so edges are smoothed by one FXAA
+// pass on the final 8-bit image instead.
 import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { FXAAShader } from 'three/addons/shaders/FXAAShader.js';
 
 // Brightest non-neon surface (sunlit white, measured) stays below this; neon is pushed above it
 export const BLOOM_THRESHOLD = 1.35;
@@ -56,13 +61,32 @@ export function createPost(renderer, scene, camera, enabled = !lowPowerDevice())
     quad.render = (r) => { if (quad.material !== bloom.blendMaterial) quadRender(r); };
   }
   composer.addPass(output);
+  const fxaa = new ShaderPass(FXAAShader);
+  fxaa.enabled = false;
+  composer.addPass(fxaa);
+  let lite = false, size = [1, 1];
+  const fitFxaa = () => {
+    const pr = renderer.getPixelRatio();
+    fxaa.material.uniforms.resolution.value.set(1 / Math.max(1, size[0] * pr), 1 / Math.max(1, size[1] * pr));
+  };
   return {
     enabled: true, bloom,
+    get lite() { return lite; },
     render: () => composer.render(),
+    setLite(on) {
+      if (on === lite) return;
+      lite = on;
+      // the composer's buffers are re-created with the new sample count on their next use
+      for (const t of [composer.renderTarget1, composer.renderTarget2]) { t.samples = on ? 0 : 4; t.dispose(); }
+      fxaa.enabled = on;
+      fitFxaa();
+    },
     setSize(w, h) {
       const pr = renderer.getPixelRatio();
+      size = [w, h];
       composer.setPixelRatio(pr); composer.setSize(w, h);
       bloom.setSize(Math.max(1, Math.round(w * pr * BLOOM_SCALE)), Math.max(1, Math.round(h * pr * BLOOM_SCALE)));
+      fitFxaa();
     }
   };
 }
