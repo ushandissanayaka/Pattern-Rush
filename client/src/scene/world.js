@@ -30,6 +30,8 @@ export const WORLD = {
 // Animated actors. main.js calls tickWorld(dt, camera) each frame.
 const ACTORS = [];
 export const BILLBOARDS = [];
+// Tops of the three glowing pedestals between the leaderboards (scene/dancers.js puts dancers there).
+export const DANCE_SPOTS = [];
 // Conveyor strips (chevron road): { minX, maxX, minZ, maxZ, dx, dz } — main.js pushes the player.
 export const CONVEYORS = [];
 // Playing places: { id, side, z, red, blue, sign } — two-player stations.
@@ -321,6 +323,7 @@ function spawnPad(parent) {
     box(w, 0.47, d, tileGlow, p.x + x, 0.24, p.z + z, parent, false);
 }
 
+const WHEEL_IDLE_SPEED = 0.35;   // rad/s, about 18 s per turn
 function wheelSpin(parent) {
   const g = new THREE.Group();
   // clockwise from 12 o'clock: purple, red, orange, yellow, green, blue
@@ -343,6 +346,10 @@ function wheelSpin(parent) {
   const ptr = new THREE.Shape(); ptr.moveTo(-1.5, 0); ptr.lineTo(1.5, 0); ptr.lineTo(0.15, -4.6); ptr.lineTo(-0.15, -4.6); ptr.closePath();
   const pointer = new THREE.Mesh(new THREE.ExtrudeGeometry(ptr, { depth: 0.6, bevelEnabled: false }), mat('#fbfbfc'));
   pointer.position.set(0, R + 3.2, 1.1); g.add(pointer); pointer.position.y += H;                  // fixed, does not spin
+  // the disc turns slowly all the time: merge its ~20 parts into one mesh per colour (≈9 draw calls),
+  // keep it out of the world's static batch, and rotate the whole group (one matrix per frame)
+  mergeStatic(disc); disc.userData.dynamic = true;
+  ACTORS.push((dt) => { disc.rotation.z -= dt * WHEEL_IDLE_SPEED; });
   disc.position.y = H; g.add(disc);
   box(1.2, 4.2, 1.2, mat('#8a92a6'), 0, H + R + 3.2, -0.2, g, false);                               // pointer post
   // low blue stand
@@ -561,7 +568,7 @@ function leaderboard(title, icon, valueColor, rows, x, countdownStart, parent) {
 }
 function pedestal(x, parent) {
   box(6.5, 3, 6.5, mat(C.pedestal), x, 1.5, 63, parent);
-  box(7, 0.6, 7, neon(C.lbNeon, 1.1), x, 3.3, 63, parent, false);
+  box(7, 0.6, 7, neon(C.lbNeon, 1.1, -0.25), x, 3.3, 63, parent, false);   // soft glow: dancers stand on it
   return new THREE.Vector3(x, 3.6, 63);
 }
 
@@ -859,8 +866,8 @@ export function buildWorld(scene) {
   leaderboard('Time Played', 'clock', C.lbTime, [['nova_77', '1d 4h'], ['pixelpine', '1d 1h'], ['emberfox', '23h 32m'], ['quietkoi', '22h 38m'], ['mintbyte', '21h 8m'], ['lumen_12', '19h 57m']], 30, 53, root);
   leaderboard('Top Wins', 'trophy', C.lbWins, [['tidewalker', '271'], ['orbit_jay', '207'], ['cobaltcat', '203'], ['fernly', '199'], ['zigzag42', '165'], ['moonbeam', '155']], 0, 37, root);
   leaderboard('Best Streak', 'flame', C.lbStreak, [['tidewalker', '269'], ['orbit_jay', '203'], ['fernly', '198'], ['cobaltcat', '179'], ['zigzag42', '110'], ['pebble_9', '83']], -30, 17, root);
-  // pedestals between the boards (statues removed: the player is the only character)
-  for (const x of [15, -15, -45]) pedestal(x, root);
+  // pedestals between the boards; dancers are added outside the static batch (scene/dancers.js)
+  for (const x of [15, -15, -45]) DANCE_SPOTS.push(pedestal(x, root));
   bridgeChallenge(root);
   // plaza trees, crates and step blocks — positions measured on top-down screenshots 38, 43, 44
   roundTree(-56, 64, 16, root, 0, 1);     // big round tree, back corner on the Packs side
