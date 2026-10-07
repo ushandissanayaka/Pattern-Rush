@@ -1,0 +1,9 @@
+# Netlify build for the game client (the Netlify site's base directory is `client`).
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  # Realtime game server on Render. Vite bakes this into the client at build time; without it the
+  # client looks for the server on the Netlify domain and the loading screen never finishes.
+  VITE_REALTIME_URL = "wss://pattern-rush.onrender.com/api/realtime"
