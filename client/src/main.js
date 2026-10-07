@@ -1,5 +1,4 @@
-// Cipher Clash — Phase 0 client entry. Renders the lobby world, your Legion
-// character, and the camera. No game logic, networking or login (docs/GAME_SPEC.md §9).
+// Cipher Clash client entry. Renders the lobby, player presence, and booth matches.
 import * as THREE from 'three';
 import { buildWorld, tickWorld, BILLBOARDS, WORLD, CONVEYORS, CONVEYOR_SPEED } from './scene/world.js';
 import { createSky } from './scene/sky.js';
@@ -10,10 +9,14 @@ import { initHud } from './ui/hud.js';
 import { LegionCharacter } from './bloxity/legion-avatar.js';
 import { startLegion, onLocalPlayerChanged, getLocalPlayer } from './bloxity/legion-sdk.js';
 import { createMatchSystem } from './game/match.js';
+import { createMultiplayer, createRemotePlayers } from './network/multiplayer.js';
 
 const canvas = document.getElementById('world-canvas');
 const LOW = lowPowerDevice();
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+const POST_FX = !LOW && !location.search.includes('nobloom');
+// With post-processing the scene is antialiased in the composer's 4× MSAA target; the canvas
+// itself only receives a full-screen quad, so its own MSAA would be pure extra GPU work.
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: !POST_FX, powerPreference: 'high-performance' });
 // Adaptive resolution: start at up to 1.5× (2× is rarely visible but costs ~78 % more
 // pixels) and step down / up to hold ~60 fps (see the frame loop below).
 const FIXED_PR = parseFloat(new URLSearchParams(location.search).get('pr'));   // ?pr=1 pins resolution (screenshots)
@@ -43,7 +46,7 @@ Object.assign(sun.shadow.camera, { left: -90, right: 90, top: 90, bottom: -90, n
 sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.05; sun.shadow.radius = 1.4;   // soft Roblox-like edges
 scene.add(sun, sun.target);
 const sky = createSky(scene, SUN_DIR);
-const post = createPost(renderer, scene, camera, !LOW && !location.search.includes('nobloom'));
+const post = createPost(renderer, scene, camera, POST_FX);
 
 startLegion();
 await document.fonts.ready; // billboards are drawn to canvas with web fonts
@@ -54,11 +57,19 @@ buildWorld(scene);
 const me = new LegionCharacter({});
 me.root.userData.class = 'avatar-3d avatar-3d--me legion-character';
 scene.add(me.root);
+const remotePlayers = createRemotePlayers(scene);
+const multiplayer = createMultiplayer(remotePlayers.handleMessage);
+let localIdentity = getLocalPlayer();
+window.addEventListener('cc:identify-request', () => {
+  multiplayer.send('identify', { player: localIdentity });
+});
 // No name tag on your own avatar (matches the video: only other players show one).
 onLocalPlayerChanged((p) => {
+  localIdentity = p;
   me.setSkin(p.skinUrl);
   me.applyEquipped(p.equipped);
   if (p.proportions && p.proportions.height) me.root.scale.set(1, p.proportions.height, 1);
+  multiplayer.send('identify', { player: p });
   window.dispatchEvent(new CustomEvent('cc:player', { detail: p }));
 });
 
@@ -79,14 +90,16 @@ function respawn(at = WORLD.spawn, faceCastle = true) {
 window.addEventListener('cc:return-to-lobby', () => { state.checkpoint.copy(WORLD.spawn); respawn(); });
 
 // --- walking (WASD / arrows / joystick, Space = jump) with simple box collisions.
-// Client-side feel only; the server will own movement when multiplayer lands.
+// Movement stays client-simulated and is broadcast for live lobby presence.
 const keys = new Set();
-const WALK_SPEED = 16, JUMP_V = 50, GRAVITY = 196.2; // Roblox defaults (studs, s)
+const WALK_SPEED = 19, JUMP_V = 50, GRAVITY = 196.2;
+const JUMP_BUFFER_TIME = 0.2;
 const touchControls = document.getElementById('touch-controls');
 const touchStick = document.getElementById('touch-stick');
 const touchStickThumb = document.getElementById('touch-stick-thumb');
 const touchJump = document.getElementById('touch-jump');
 const touchInput = { x: 0, y: 0, jump: false, stickPointer: null, jumpPointer: null };
+let jumpBuffer = 0;
 if (navigator.maxTouchPoints > 0) touchControls.hidden = false;
 
 function updateTouchStick(e) {
@@ -125,6 +138,7 @@ touchJump.addEventListener('pointerdown', (e) => {
   e.preventDefault();
   touchInput.jumpPointer = e.pointerId;
   touchInput.jump = true;
+  jumpBuffer = JUMP_BUFFER_TIME;
   touchJump.setPointerCapture(e.pointerId);
 });
 function releaseTouchJump(e) {
@@ -136,15 +150,16 @@ touchJump.addEventListener('pointerup', releaseTouchJump);
 touchJump.addEventListener('pointercancel', releaseTouchJump);
 
 addEventListener('keydown', (e) => {
-  if (e.target.closest?.('input,textarea,select,button')) return;
+  if (e.target.closest?.('input,textarea,select,[contenteditable="true"]')) return;
   const k = e.key.toLowerCase();
   if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(k)) {
     keys.add(k); e.preventDefault();
+    if (k === ' ') jumpBuffer = JUMP_BUFFER_TIME;
   }
 });
 addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
 addEventListener('blur', () => {
-  keys.clear(); resetTouchStick(); touchInput.jump = false; touchInput.jumpPointer = null;
+  keys.clear(); resetTouchStick(); touchInput.jump = false; touchInput.jumpPointer = null; jumpBuffer = 0;
 });
 
 function walk(dt) {
@@ -173,7 +188,12 @@ function walk(dt) {
       }
     }
   }
-  if ((keys.has(' ') || touchInput.jump) && state.grounded && rig.enabled) vel.y = JUMP_V;
+  const jumpHeld = keys.has(' ') || touchInput.jump;
+  jumpBuffer = Math.max(0, jumpBuffer - dt);
+  if (rig.enabled && state.grounded && (jumpBuffer > 0 || jumpHeld)) {
+    vel.y = JUMP_V;
+    jumpBuffer = 0;
+  }
   vel.y = Math.max(vel.y - GRAVITY * dt, -160);
   const res = moveCharacter(feet, vel, dt);
   state.grounded = res.grounded;
@@ -195,11 +215,18 @@ function resize() {
 }
 new ResizeObserver(resize).observe(canvas); resize();
 
-const match = createMatchSystem({ scene, camera, me, feet, state, getName: () => getLocalPlayer().name });
+const match = createMatchSystem({
+  scene, camera, me, feet, state,
+  getName: () => getLocalPlayer().name,
+  multiplayer,
+  getRemoteCharacter: remotePlayers.getCharacter
+});
+remotePlayers.setControlFilter(match.controlsRemote);
 if (import.meta.env.DEV) window.__match = match;
 const clock = new THREE.Clock();
 const wp = new THREE.Vector3(), shadowFocus = new THREE.Vector3();
 const perf = { t: 0, n: 0, last: 0 };
+let networkElapsed = 0, networkIdle = 0, lastMoveKey = '';
 renderer.setAnimationLoop(() => {
   const dt = Math.min(clock.getDelta(), 0.1);
   prevFeet.copy(feet);
@@ -218,6 +245,19 @@ renderer.setAnimationLoop(() => {
     me.update(dt, state.grounded ? state.inputSpeed : 0);
   }
   tickWorld(dt, camera);
+  remotePlayers.update(dt);
+  // 10 updates/s while moving; standing still only refreshes once a second, so a lobby full of
+  // idle players does not flood every client with identical position messages
+  networkElapsed += dt; networkIdle += dt;
+  if (networkElapsed >= 0.1) {
+    networkElapsed = 0;
+    const p = me.root.position, moveState = !state.grounded ? 'airborne' : state.inputSpeed > 0.5 || match.avatarSpeed() > 0.5 ? 'walk' : 'idle';
+    const key = `${p.x.toFixed(2)},${p.y.toFixed(2)},${p.z.toFixed(2)},${me.root.rotation.y.toFixed(2)},${moveState}`;
+    if (key !== lastMoveKey || networkIdle >= 1) {
+      lastMoveKey = key; networkIdle = 0;
+      multiplayer.send('move', { position: { x: p.x, y: p.y, z: p.z }, heading: me.root.rotation.y, state: moveState });
+    }
+  }
 
   if (match.cameraActive()) { match.updateCamera(dt); me.root.visible = true; }
   else { const firstPerson = rig.update(dt, feet); me.root.visible = !firstPerson; }

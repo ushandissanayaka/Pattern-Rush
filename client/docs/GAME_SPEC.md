@@ -93,7 +93,8 @@ stepping slabs, low-poly round trees and pines, crates, packs stall, spin wheel 
 The recording has an AAC stereo track. I could not listen to it here, so audio cues are **UNKNOWN**. Likely needs:
 UI click, offer pop-in, footsteps, wheel tick, pack open, token place, check result (correct / wrong), win / lose stingers, lobby music.
 
-## 9. Deferred (not in Phase 0)
+## 9. Multiplayer
 
-Game logic (pattern, checking, scoring), bot, Colyseus multiplayer (server-authoritative, the secret is held only on the server), login,
-full Boxity SDK integration (friends, invites, loading screen, ads, settings, gem packs), avatar movement, proximity prompts, wheel spin, pack opening.
+Players connect to the realtime server and appear as live, named avatars in the lobby. "Join Game" on a booth pad seats a player in that booth right away when that side is free; they wait there ("1/2 Players") until someone joins the other side, or can switch to PLAY VS. BOT. PLAY puts a player in the matchmaking queue: they go straight into a booth where someone is waiting, otherwise the server pairs two queued players at random in a free booth (one red, one blue). Separate booths run independent 1v1 pattern matches. Every other player can watch a live match: the booth shows each player's cracked objects and the sign reports each guess, and "Watch Game" at a live booth (or WATCH LIVE in the queue) opens a spectator camera with both players' progress. PLAY VS. BOT seats a player alone in a free booth. Secret patterns and guess validation are held on the server. Player presence and active matches are in-memory and reset when the server restarts.
+
+Login and full Boxity SDK integration (friends, invites, loading screen, ads, settings, gem packs), wheel spin, and pack opening remain deferred.
