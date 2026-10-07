@@ -12,9 +12,11 @@ export function createMultiplayer(onMessage) {
   let closed = false;
   let retryDelay = 1000;
   let reconnectTimer = null;
+  let retries = 0;                          // reconnect attempts since the last successful connection
 
   function connect() {
     if (closed) return;
+    if (socket) window.dispatchEvent(new CustomEvent('cc:network-retry', { detail: { attempt: ++retries } }));
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
     const endpoint = import.meta.env.VITE_REALTIME_URL || `${protocol}//${location.host}/api/realtime`;
     const url = new URL(endpoint, location.href);
@@ -24,7 +26,7 @@ export function createMultiplayer(onMessage) {
     const ws = new WebSocket(url);
     socket = ws;
     ws.addEventListener('open', () => {
-      retryDelay = 1000;
+      retryDelay = 1000; retries = 0;
       window.dispatchEvent(new CustomEvent('cc:network', { detail: { connected: true } }));
       window.dispatchEvent(new CustomEvent('cc:identify-request'));
     });

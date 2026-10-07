@@ -14,6 +14,16 @@
   <script src="https://sdk.bloxity.io/v1/legion-sdk.min.js"></script>
 </head>
 <body data-screen="lobby">
+  <!-- Loading screen: visible from the first paint until the world, your avatar and the
+       server connection are ready, then it fades into the game (src/ui/loading.js). -->
+  <div class="loading" id="loading">
+    <div class="loading__card">
+      <img class="loading__icon" src="assets/loading-icon.png" alt="" width="512" height="512">
+      <h1 class="loading__title">Is It Verity?</h1>
+      <p class="loading__creator">Prince Creations</p>
+    </div>
+    <p class="loading__status" id="loading-status" role="status" aria-live="polite">Loading assets</p>
+  </div>
   <!-- 3D lobby world (Three.js). Camera behaviour: js/camera.js -->
   <canvas id="world-canvas" class="world-canvas" aria-label="Lobby world view. Drag to rotate the camera; scroll, pinch or press I / O to zoom."></canvas>
   <div class="touch-controls" id="touch-controls" aria-label="Touch controls" hidden>
@@ -25,6 +35,10 @@
 
   <!-- ===================== LOBBY HUD (S01 — every frame of the video) ===================== -->
   <div class="hud" id="hud" data-screen-layer="hud">
+    <!-- Sound on / off (also the M key) -->
+    <button class="hud-sound" id="btn-sound" type="button" aria-pressed="false" aria-label="Sound on. Turn sound off (M)">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path class="hud-sound__speaker" d="M4 9h4l5-4v14l-5-4H4z"/><path class="hud-sound__waves" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12"/><path class="hud-sound__off" d="M16 9l6 6M22 9l-6 6"/></svg>
+    </button>
 
     <!-- Left rail -->
     <div class="hud-left">

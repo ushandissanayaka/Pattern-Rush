@@ -9,6 +9,7 @@
 import * as THREE from 'three';
 import { STATIONS } from '../scene/world.js';
 import { showScreen } from '../ui/hud.js';
+import { sfx } from '../audio/sound.js';
 import { LegionCharacter, LEGION_CDN } from '../bloxity/legion-avatar.js';
 import { TOKENS, TOKEN, PATTERN_LENGTH, randomPattern, tokenIcon, tokenMesh, drawBarCell } from './tokens.js';
 
@@ -564,6 +565,7 @@ export function createMatchSystem({ scene, camera, me, feet, state, getName, mul
     // walk to the slot column on the deck holding the object
     const held = tokenMesh(id, TOKEN_SIZE); held.rotation.y = Math.PI / 2; p.half.group.add(held);
     p.held = held; p.walkTo = new THREE.Vector3(DECK_X, DECK_Y, SLOT_Z(slot));
+    sfx('pickup');
     say(p.char, prev === id ? `Another ${TOKEN[id].name}?` : `Is It ${TOKEN[id].name}?`, 'ask', 15);
     while (p.walkTo) { await wait(0.05); if (myGen !== gen) return false; }
     // drop it into the green box on the ledge (short arc)
@@ -574,8 +576,10 @@ export function createMatchSystem({ scene, camera, me, feet, state, getName, mul
       await wait(0.035); if (myGen !== gen) return false;
     }
     p.guide.visible = false;
+    sfx('drop');
     await wait(0.9); if (myGen !== gen) return false;
     if (networkMatch ? networkCorrect : p.target[slot] === id) {
+      sfx('correct');
       p.revealed[slot] = id; p.placed[slot] = held; p.idx++;
       syncBar(p);
       say(p.char, 'Correct!', 'correct');
@@ -585,6 +589,7 @@ export function createMatchSystem({ scene, camera, me, feet, state, getName, mul
       return true;
     }
     p.wrong[slot].add(id);
+    sfx('wrong');
     hush(p.char);
     say(other(p).char, 'No, no, no!', 'wrong');
     for (let s = 1; s > 0; s -= 0.1) { held.scale.setScalar(Math.max(0.01, s)); await wait(0.03); }
@@ -597,6 +602,7 @@ export function createMatchSystem({ scene, camera, me, feet, state, getName, mul
     M.over = true;
     M.station.sign.set('WINNER', C_WIN, `${winner.name} wins!`);
     const won = winner === M.me;
+    sfx(won ? 'win' : 'lose');
     ui.resultTitle.textContent = won ? 'YOU WIN!' : 'YOU LOSE!';
     ui.resultTitle.className = 'mm-result__title stroke-text ' + (won ? 'is-win' : 'is-lose');
     ui.resultSub.textContent = `${winner.name} cracked the pattern first!`;
@@ -706,6 +712,8 @@ export function createMatchSystem({ scene, camera, me, feet, state, getName, mul
     const held = tokenMesh(ev.tokenId, TOKEN_SIZE); held.rotation.y = Math.PI / 2;
     held.position.set(DECK_X + 1.8 * CHAR_SCALE, DECK_Y + 3.2 * CHAR_SCALE, SLOT_Z(slot));
     p.half.group.add(held); p.held = held; p.carrying = true;
+    const watched = () => watchId === view.station.id;
+    if (watched()) sfx('pickup');
     view.say = { name: p.name, color: p.color, text: prev === ev.tokenId ? `Another ${TOKEN[ev.tokenId].name}?` : `Is It ${TOKEN[ev.tokenId].name}?` };
     viewChanged(view);
     const asker = getRemoteCharacter?.(p.id);
@@ -717,7 +725,9 @@ export function createMatchSystem({ scene, camera, me, feet, state, getName, mul
       held.position.lerpVectors(from, to, t); held.position.y += Math.sin(t * Math.PI) * 2;
       await vwait(0.035); if (!alive()) return;
     }
+    if (watched()) sfx('drop');
     await vwait(0.9); if (!alive()) return;
+    if (watched()) sfx(ev.correct ? 'correct' : 'wrong');
     if (ev.correct) {
       p.revealed[slot] = ev.tokenId; p.placed[slot] = held; p.held = null;
       showProgress(p, p.revealed);
@@ -736,6 +746,7 @@ export function createMatchSystem({ scene, camera, me, feet, state, getName, mul
     }
     await vwait(0.9); if (!alive()) return;
     view.winner = viewPlayer(view, ev.winnerId);
+    if (view.winner && watched()) sfx('win');
     view.turn = view.winner ? null : viewPlayer(view, ev.nextTurnId) || viewOther(view, p);
     view.say = null; viewChanged(view);
   }

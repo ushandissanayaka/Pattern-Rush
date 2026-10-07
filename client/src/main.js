@@ -11,6 +11,8 @@ import { LegionCharacter } from './bloxity/legion-avatar.js';
 import { startLegion, onLocalPlayerChanged, getLocalPlayer } from './bloxity/legion-sdk.js';
 import { createMatchSystem } from './game/match.js';
 import { createMultiplayer, createRemotePlayers } from './network/multiplayer.js';
+import { loadingStatus, finishLoading } from './ui/loading.js';
+import { initAudio, sfx, isMuted, setMuted } from './audio/sound.js';
 
 const canvas = document.getElementById('world-canvas');
 const LOW = lowPowerDevice();
@@ -50,8 +52,11 @@ const sky = createSky(scene, SUN_DIR);
 const post = createPost(renderer, scene, camera, POST_FX);
 
 startLegion();
+initAudio();   // sounds + music render in the background while the world loads
 await document.fonts.ready; // billboards are drawn to canvas with web fonts
 await Promise.all(["400 40px 'Luckiest Guy'", "700 40px 'Fredoka'", "600 40px 'Fredoka'", "900 40px 'Montserrat'", "800 40px 'Montserrat'"].map(f => document.fonts.load(f).catch(() => {})));
+loadingStatus('Building world');
+await new Promise((r) => requestAnimationFrame(() => setTimeout(r)));   // let the new status paint first
 buildWorld(scene);
 const dancers = createDancers(scene, DANCE_SPOTS);
 
@@ -95,6 +100,7 @@ window.addEventListener('cc:return-to-lobby', () => { state.checkpoint.copy(WORL
 // Movement stays client-simulated and is broadcast for live lobby presence.
 const keys = new Set();
 const WALK_SPEED = 19, JUMP_V = 50, GRAVITY = 196.2;
+let stepTimer = 0;
 const JUMP_BUFFER_TIME = 0.2;
 const touchControls = document.getElementById('touch-controls');
 const touchStick = document.getElementById('touch-stick');
@@ -209,7 +215,16 @@ function walk(dt) {
 // Camera is paused while a modal / match screen is open (no stray orbiting behind panels).
 
 initHud();
-if (import.meta.env.DEV) window.__cc = { rig, feet, vel, state, respawn, renderer, scene, sun, me, get pixelRatio() { return pixelRatio; } }; // dev-only debug handle (tests)
+// sound on / off (top-right button, or the M key)
+const soundButton = document.getElementById('btn-sound');
+const showSoundState = () => {
+  soundButton.classList.toggle('is-muted', isMuted());
+  soundButton.setAttribute('aria-pressed', String(isMuted()));
+  soundButton.setAttribute('aria-label', isMuted() ? 'Sound off. Turn sound on (M)' : 'Sound on. Turn sound off (M)');
+};
+soundButton.addEventListener('click', (e) => { e.stopPropagation(); if (e.detail > 0) soundButton.blur(); setMuted(!isMuted()); });
+addEventListener('cc:muted', showSoundState); showSoundState();
+if (import.meta.env.DEV) window.__cc = { rig, feet, vel, state, respawn, renderer, scene, sun, me, post, get pixelRatio() { return pixelRatio; } }; // dev-only debug handle (tests)
 
 function resize() {
   const w = canvas.clientWidth, h = canvas.clientHeight;
@@ -227,7 +242,11 @@ remotePlayers.setControlFilter(match.controlsRemote);
 if (import.meta.env.DEV) window.__match = match;
 const clock = new THREE.Clock();
 const wp = new THREE.Vector3(), shadowFocus = new THREE.Vector3();
-const perf = { t: 0, n: 0, last: 0 };
+const perf = { t: 0, n: 0, last: 0, slow: 0 };
+function useLiteRendering() {
+  post.setLite(true);
+  if (sun.shadow.mapSize.x > 1024) { sun.shadow.map?.dispose(); sun.shadow.map = null; sun.shadow.mapSize.set(1024, 1024); }
+}
 let networkElapsed = 0, networkIdle = 0, lastMoveKey = '';
 renderer.setAnimationLoop(() => {
   const dt = Math.min(clock.getDelta(), 0.1);
@@ -246,6 +265,12 @@ renderer.setAnimationLoop(() => {
     me.setState(state.grounded ? 'idle' : 'airborne');
     me.update(dt, state.grounded ? state.inputSpeed : 0);
   }
+  // footsteps: one per stride, following your own walking speed (on the lobby floor or a booth deck)
+  const stepSpeed = match.ownsAvatar() ? match.avatarSpeed() : state.grounded ? state.inputSpeed : 0;
+  if (stepSpeed > 0.5) {
+    stepTimer -= dt;
+    if (stepTimer <= 0) { stepTimer = 0.34 * Math.min(1.8, WALK_SPEED / stepSpeed); sfx('step', { rate: 0.9 + Math.random() * 0.2, volume: 0.55 }); }
+  } else stepTimer = 0.08;
   tickWorld(dt, camera);
   remotePlayers.update(dt);
   // 10 updates/s while moving; standing still only refreshes once a second, so a lobby full of
@@ -282,14 +307,41 @@ renderer.setAnimationLoop(() => {
   dancers.update(dt, camera);
   post.render();
 
-  // adaptive resolution: average frame time over ~1 s, step pixel ratio by 0.15
+  // adaptive quality: average frame time over ~1 s. After two slow seconds in a row, first switch
+  // to lite rendering once (FXAA instead of 4× MSAA, 1024 shadow map — nearly the same look, a
+  // fraction of the GPU cost); only if it is still slow, step the pixel ratio down by 0.15.
   perf.t += clock.elapsedTime - perf.last; perf.last = clock.elapsedTime; perf.n++;
   if (perf.t >= 1) {
     const ms = (perf.t / perf.n) * 1000; perf.t = 0; perf.n = 0;
+    perf.slow = ms > 22 ? perf.slow + 1 : 0;
     let next = pixelRatio;
-    if (ms > 22 && pixelRatio > MIN_PR) next = Math.max(MIN_PR, pixelRatio - 0.15);
+    if (perf.slow >= 2 && post.enabled && !post.lite) { useLiteRendering(); perf.slow = 0; }
+    else if (perf.slow >= 2 && pixelRatio > MIN_PR) { next = Math.max(MIN_PR, pixelRatio - 0.15); perf.slow = 0; }
     else if (ms < 13 && pixelRatio < MAX_PR) next = Math.min(MAX_PR, pixelRatio + 0.15);
     if (next !== pixelRatio) { pixelRatio = next; renderer.setPixelRatio(pixelRatio); resize(); }
   }
 });
 document.body.dataset.ready = '1';
+
+// Loading screen: wait for your avatar (with a time limit, so a slow CDN never blocks the game) and
+// for the server; while the server is unavailable (e.g. Render waking up) show the retry count.
+// Then enter the game.
+const within = (promise, ms) => Promise.race([promise, new Promise((r) => setTimeout(r, ms))]);
+const nextFrame = () => new Promise((r) => requestAnimationFrame(() => r()));
+(async () => {
+  loadingStatus('Loading avatar');
+  await within(me.whenReady(), 10000);
+  loadingStatus('Joining server');
+  if (!multiplayer.connected) {
+    const onRetry = (e) => loadingStatus(`Waiting for an available server. Retrying...(${e.detail.attempt})`);
+    addEventListener('cc:network-retry', onRetry);
+    await new Promise((r) => {
+      const onNetwork = (e) => { if (e.detail.connected) { removeEventListener('cc:network', onNetwork); r(); } };
+      addEventListener('cc:network', onNetwork);
+    });
+    removeEventListener('cc:network-retry', onRetry);
+    loadingStatus('Joining server');
+  }
+  await nextFrame();
+  finishLoading();
+})();
