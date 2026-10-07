@@ -767,14 +767,14 @@ body[data-match="voting"] .hud-left, body[data-match="building"] .hud-left { dis
 .mm-wait__hint { margin: 0; font: 800 calc(22 * var(--u)) / 1 var(--f-match); color: #fff; -webkit-text-stroke-width: calc(4 * var(--u)) !important; }
 
 /* ===================== LOADING SCREEN ===================== */
-/* Blurred key art (a Legion character in a booth, red arrow, token-coloured code bar) behind a dark
+/* Static loading screen (no animation): blurred key art (the game's smiley balls on a booth shelf,
+   token-coloured code bar) behind a dark
    card with the game icon, title and creator; status at the bottom. The art is pre-blurred, so the
    page costs no blur work while the game loads; the gradient shows until the image arrives. */
 .loading { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 0 16px;
   background: url('/assets/loading-bg.jpg') center / cover no-repeat,
     linear-gradient(180deg, #d9edf7 0%, #eef6fa 60%, #c9d5d9 100%);
-  transition: opacity .55s ease; font-family: var(--f-body); color: #fff; }
-.loading.is-done { opacity: 0; pointer-events: none; }
+  font-family: var(--f-body); color: #fff; }
 .loading__card { position: relative; width: min(1124px, 100%); min-height: clamp(220px, 29vh, 292px);
   margin-top: clamp(64px, 12.8vh, 128px); padding: clamp(118px, 18vh, 168px) 24px clamp(28px, 4.5vh, 44px);
   box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
