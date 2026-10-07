@@ -63,6 +63,10 @@ function neon(color, k = 1.3, glow = 0.55) {
   return m;
 }
 
+// Long, thin, low trims (neon strips, ledge lips, curbs, pad frames, rims) cast long thin shadows at
+// grazing angles; the shadow map draws those edges as shimmering stair-steps that look like
+// z-fighting, so these pieces receive shadows but do not cast them.
+function noShadow(mesh) { mesh.castShadow = false; return mesh; }
 const SOLID = [];   // meshes registered as colliders once the world is built
 function box(w, h, d, material, x = 0, y = 0, z = 0, parent, solid = true) {
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
@@ -259,21 +263,21 @@ function booth(side, z, trim, state, parent, seam = 1) {
   box(1.5, BOOTH_H, BOOTH_W - 2, inner, -BOOTH_D / 2 + 1.5, BOOTH_H / 2, 0, g);        // back wall
   box(1.5, BOOTH_H + 2, BOOTH_W + 2, white, -BOOTH_D / 2, (BOOTH_H + 2) / 2, 0, g);     // outer back
   for (const s of [-1, 1]) {
-    box(BOOTH_D, BOOTH_H, 1.2, inner, 0, BOOTH_H / 2, s * (BOOTH_W / 2 - 1.6), g, false); // inner side panel
+    box(BOOTH_D - 0.2, BOOTH_H, 1.2, inner, 0, BOOTH_H / 2, s * (BOOTH_W / 2 - 1.6), g, false); // inner side panel (inset: not flush with the floor's front face)
     box(BOOTH_D, BOOTH_H + 1, 2, white, 0, (BOOTH_H + 1) / 2, s * BOOTH_W / 2, g);        // side wall
     box(3.4, BOOTH_H + 5, 3.4, white, BOOTH_D / 2 - 1, (BOOTH_H + 5) / 2, s * (BOOTH_W / 2 + 0.6), g); // front pillar
-    box(0.22, BOOTH_H + 2, 0.4, nm, BOOTH_D / 2 + 0.75, (BOOTH_H + 2) / 2 + 0.5, s * (BOOTH_W / 2 - 1.6), g, false); // neon front
-    box(0.22, BOOTH_H - 4, 0.3, nm, -BOOTH_D / 2 + 2.4, BOOTH_H / 2, s * (BOOTH_W / 2 - 3), g, false);            // neon back corners
-    box(BOOTH_D - 2, 0.28, 0.28, nm, 0, BOOTH_H + 1.1, s * (BOOTH_W / 2 - 0.6), g, false);                          // neon along wall top
+    noShadow(box(0.22, BOOTH_H + 2, 0.4, nm, BOOTH_D / 2 + 0.75, (BOOTH_H + 2) / 2 + 0.5, s * (BOOTH_W / 2 - 1.6), g, false)); // neon front
+    noShadow(box(0.22, BOOTH_H - 4, 0.3, nm, -BOOTH_D / 2 + 2.4, BOOTH_H / 2, s * (BOOTH_W / 2 - 3), g, false));            // neon back corners
+    noShadow(box(BOOTH_D - 2, 0.28, 0.28, nm, 0, BOOTH_H + 1.1, s * (BOOTH_W / 2 - 0.6), g, false));                          // neon along wall top
   }
-  box(0.28, 0.28, BOOTH_W - 4, nm, -BOOTH_D / 2 + 2.4, BOOTH_H - 2.5, 0, g, false);
+  noShadow(box(0.28, 0.28, BOOTH_W - 4, nm, -BOOTH_D / 2 + 2.4, BOOTH_H - 2.5, 0, g, false));
   // tiered stand: lower facade with the code bar, upper deck where players stand
   box(14, 9, BOOTH_W - 4, white, BOOTH_D / 2 - 7, 4.5, 0, g);
   box(14, 13, BOOTH_W - 4, white, BOOTH_D / 2 - 21, 6.5, 0, g);
-  box(4, 1.2, BOOTH_W - 6, mat(C.boothShade), BOOTH_D / 2 - 1.5, 9.6, 0, g, false);   // ledge lip
+  noShadow(box(4, 1.2, BOOTH_W - 6, mat(C.boothShade), BOOTH_D / 2 - 1.5, 9.6, 0, g, false));   // ledge lip
   const bar = new THREE.Mesh(new THREE.PlaneGeometry(BOOTH_W - 8, 3.6),
     matte({ map: codeBarTex(state.tokens || []), roughness: 0.6 }));
-  bar.rotation.y = Math.PI / 2; bar.position.set(BOOTH_D / 2 + 0.02, 5.2, 0); g.add(bar);
+  bar.rotation.y = Math.PI / 2; bar.position.set(BOOTH_D / 2 + 0.08, 5.2, 0); g.add(bar);   // clear of the facade (no z-fighting)
   g.userData.barTex = bar.material.map;   // redrawn by the match system as slots are revealed
   // tokens waiting on the ledge (same order as the bar)
   (state.tokens || []).forEach((t, i) => {
@@ -283,8 +287,8 @@ function booth(side, z, trim, state, parent, seam = 1) {
   });
   // ONE join pad per half, in this half's colour, right next to the seam (screenshot 48)
   const padKind = trim === 'red' ? 'red' : 'blue', pz = seam * (BOOTH_W / 2 - 4.5);
-  box(8.6, 0.3, 7.6, padFrameMat, BOOTH_D / 2 + 7.5, 0.15, pz, g, false);
-  const pad = box(7.4, 0.42, 6.4, padMats[padKind], BOOTH_D / 2 + 7.5, 0.21, pz, g, false);
+  noShadow(box(8.6, 0.3, 7.6, padFrameMat, BOOTH_D / 2 + 7.5, 0.15, pz, g, false));
+  const pad = noShadow(box(7.4, 0.42, 6.4, padMats[padKind], BOOTH_D / 2 + 7.5, 0.21, pz, g, false));
   pad.userData.class = `join-pad join-pad--${padKind}`;
   g.userData.padLocal = new THREE.Vector3(BOOTH_D / 2 + 7.5, 0.42, pz);
   g.position.set(side * (36 + BOOTH_D / 2), 0, z);
@@ -309,9 +313,9 @@ function spawnPad(parent) {
   });
   sunTex.wrapS = sunTex.wrapT = THREE.ClampToEdgeWrapping;
   const frame = mat('#c9cfcd');
-  box(S, 0.35, S, mat('#8cdc99'), p.x, 0.18, p.z, parent, false).userData.class = 'spawn-pad';        // pale green glass
+  noShadow(box(S - 0.1, 0.35, S - 0.1, mat('#8cdc99'), p.x, 0.18, p.z, parent, false)).userData.class = 'spawn-pad';  // pale green glass (inset inside the frame)
   for (const [w, d, x, z] of [[S, 0.9, 0, S / 2 - 0.45], [S, 0.9, 0, -S / 2 + 0.45], [0.9, S, S / 2 - 0.45, 0], [0.9, S, -S / 2 + 0.45, 0]])
-    box(w, 0.55, d, frame, p.x + x, 0.28, p.z + z, parent, false);                                      // grey outer frame
+    noShadow(box(w, 0.55, d, frame, p.x + x, 0.28, p.z + z, parent, false));                                      // grey outer frame
   const line = neon('#ffffff', 0.6, 0.16), L = S - 3.4;
   for (const [w, d, x, z] of [[L, 0.4, 0, L / 2], [L, 0.4, 0, -L / 2], [0.4, L, L / 2, 0], [0.4, L, -L / 2, 0]])
     box(w, 0.42, d, line, p.x + x, 0.22, p.z + z, parent, false);                                       // glowing inset line
@@ -342,7 +346,7 @@ function wheelSpin(parent) {
   const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 1.8, 16), mat('#f4f5f8')); hub.rotation.x = Math.PI / 2; disc.add(hub);
   disc.add(new THREE.Mesh(new THREE.TorusGeometry(R + 1.1, 1.25, 14, 72), mat('#f4f5f8')));      // thick white rim
   disc.add(new THREE.Mesh(new THREE.TorusGeometry(R + 0.05, 0.28, 8, 72), mat('#9aa0b4')));      // grey inner lip
-  const body = new THREE.Mesh(new THREE.CylinderGeometry(R + 0.2, R + 0.2, 1.4, 64), mat('#dfe2ea')); body.rotation.x = Math.PI / 2; disc.add(body);
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(R + 0.2, R + 0.2, 1.2, 64), mat('#dfe2ea')); body.rotation.x = Math.PI / 2; disc.add(body);   // 15 cm behind the slices (no z-fighting)
   const ptr = new THREE.Shape(); ptr.moveTo(-1.5, 0); ptr.lineTo(1.5, 0); ptr.lineTo(0.15, -4.6); ptr.lineTo(-0.15, -4.6); ptr.closePath();
   const pointer = new THREE.Mesh(new THREE.ExtrudeGeometry(ptr, { depth: 0.6, bevelEnabled: false }), mat('#fbfbfc'));
   pointer.position.set(0, R + 3.2, 1.1); g.add(pointer); pointer.position.y += H;                  // fixed, does not spin
@@ -413,7 +417,7 @@ function nextUpdateBoard(parent) {
     mouth(); c.lineWidth = 8; c.strokeStyle = '#111'; c.lineJoin = 'round'; c.stroke();
   });
   const screen = new THREE.Mesh(new THREE.PlaneGeometry(W - 4.2, H - 4.2), matte({ map: screenTex, emissive: '#ffffff', emissiveMap: screenTex, emissiveIntensity: 0.25 }));
-  screen.position.z = T / 2 + 0.02;
+  screen.position.z = T / 2 + 0.08;   // clear of the frame (no z-fighting)
   const board = new THREE.Group(); board.add(frame, screen);
   board.position.set(0, 8.6, 0); board.rotation.x = -0.12; g.add(board);
   // two splayed legs ending in chunky feet
@@ -435,7 +439,7 @@ function packsStall(parent) {
   const wood = mat('#8a6a52'), woodDark = mat('#6e5442'), grey = mat('#6f7888'), feet = mat('#3e4249');
   // counter: grey-blue top plank on a plank front, chunky dark feet (front of stall = local +Z)
   box(15, 3.2, 0.6, wood, 0, 2.4, 2.9, g);
-  box(15, 0.9, 0.5, woodDark, 0, 0.9, 3.25, g, false);
+  box(14.8, 0.9, 0.5, woodDark, 0, 0.9, 3.25, g, false);
   box(17, 0.6, 3.4, grey, 0, 4.25, 2.4, g, false);
   for (const sx of [-1, 1]) for (const z of [3.1, -2.8]) box(1.3, 1.5, 1.3, feet, sx * 7.4, 0.75, z, g, false);
   // posts: wooden front / back corner posts, grey inner rails
@@ -504,8 +508,8 @@ function rainbowSign(lead, hot, worldHeight) {
 }
 function bridgeChallenge(parent) {
   const g = new THREE.Group(), L = 26, W = 16;
-  box(W + 1.6, 0.6, L + 1.6, mat('#7d878b'), 0, 0.3, 0, g);                                  // grey rim
-  box(W, 0.9, L, matte({ map: checker(C.grassA, C.grassB, W / 8, L / 8) }), 0, 0.45, 0, g);   // raised grass slab
+  noShadow(box(W + 1.6, 0.6, L + 1.6, mat('#7d878b'), 0, 0.3, 0, g));                        // grey rim
+  noShadow(box(W, 0.9, L, matte({ map: checker(C.grassA, C.grassB, W / 8, L / 8) }), 0, 0.45, 0, g));   // raised grass slab (low: its thin shadow band shimmered)
   crate(-4.2, 0.9, -3, 3.8, g, 0.15); crate(3.9, 0.9, -3.4, 3.8, g, -0.1); crate(-3.6, 4.7, -3.4, 3.2, g, 0.3);
   crate(4.6, 0.9, 0.6, 3.4, g, 0.25); crate(-5, 0.9, 1, 3.2, g, -0.2);
   const ball = new THREE.Mesh(new THREE.SphereGeometry(4, 32, 24), ballMat);   // simple smiley face
@@ -569,11 +573,14 @@ function leaderboard(title, icon, valueColor, rows, x, countdownStart, parent) {
   const frameMat = texturedMat(C.lbFrameA, C.lbFrameB, 5, 6);
   const board = new THREE.Group();
   box(22, 26, 1.6, frameMat, 0, 0, 0, board);
-  const panel = new THREE.Mesh(new THREE.PlaneGeometry(18.6, 22.5), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false }));
-  panel.position.z = 0.82; board.add(panel);
-  const PANEL_H = 22.5, footH = PANEL_H * FOOT / cnv.height;             // footer strip over the bottom of the panel
+  // the board shows the panel texture above the countdown strip; the two sit side by side (not
+  // overlapping) and 10 cm in front of the frame, so neither can z-fight
+  const PANEL_H = 22.5, footH = PANEL_H * FOOT / cnv.height, FACE_Z = 0.9;
+  tex.repeat.set(1, 1 - FOOT / cnv.height); tex.offset.set(0, FOOT / cnv.height);
+  const panel = new THREE.Mesh(new THREE.PlaneGeometry(18.6, PANEL_H - footH), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false }));
+  panel.position.set(0, footH / 2, FACE_Z); board.add(panel);
   const footer = new THREE.Mesh(new THREE.PlaneGeometry(18.6, footH), new THREE.MeshBasicMaterial({ map: footTex, toneMapped: false }));
-  footer.position.set(0, -PANEL_H / 2 + footH / 2, 0.83); footer.userData.dynamic = true; board.add(footer);
+  footer.position.set(0, -PANEL_H / 2 + footH / 2, FACE_Z); footer.userData.dynamic = true; board.add(footer);
   const nG = neon(C.lbNeon, 1.2);   // neon green edge glow (right + top)
   box(0.7, 26.6, 0.7, nG, 11.2, 0, -0.6, board, false); box(22.4, 0.7, 0.7, nG, 0, 13.2, -0.6, board, false);
   board.position.y = 16; board.rotation.x = -0.08; g.add(board);
@@ -611,8 +618,8 @@ const rimMat = mat('#4f5659'), platGrass = () => matte({ map: checker('#55d977',
 function glassCube(x, y, z, s, parent, rot = 0) {
   const m = new THREE.Mesh(new THREE.BoxGeometry(s, s, s), glassMat);
   m.position.set(x, y - s / 2, z); m.rotation.y = rot; m.castShadow = true; parent.add(m);
-  const e = new THREE.Mesh(new THREE.BoxGeometry(s * 1.002, s * 0.08, s * 1.002), glassEdgeMat);   // bright top edge
-  e.position.set(x, y - s * 0.04, z); e.rotation.y = rot; parent.add(e);
+  const e = new THREE.Mesh(new THREE.BoxGeometry(s + 0.15, s * 0.08, s + 0.15), glassEdgeMat);   // bright top edge, clearly
+  e.position.set(x, y - s * 0.04 + 0.03, z); e.rotation.y = rot; parent.add(e);                  // proud of the cube (no z-fighting)
   addColliderBox(new THREE.Vector3(x, y - s / 2, z), new THREE.Vector3(s * 0.95, s, s * 0.95));
 }
 function smileyBall(x, y, z, r, parent, material = ballMat) {
@@ -689,7 +696,7 @@ function octo(r0, r1, h, material, x, y, z, parent) {
 }
 function gothicWindow(x, y, z, w, h, parent) {
   box(w + 1.0, h + 1.2, 0.5, castleTrim, x, y, z, parent, false);   // white frame
-  box(w + 1.6, 0.6, 0.9, castleTrim, x, y - h / 2 - 0.6, z + 0.2, parent, false);   // sill
+  noShadow(box(w + 1.6, 0.6, 0.9, castleTrim, x, y - h / 2 - 0.6, z + 0.2, parent, false));   // sill
   arch(x, y, z + 0.28, w, h, parent);
 }
 function pinnacle(x, y, z, parent) {
@@ -706,7 +713,7 @@ function tower(x, z, w, h, parent, roofH = w * 2.1) {
     octo(rr, rr, th, castleWall, x, y + th / 2, z, body);
     SOLID.push(body.children[body.children.length - 1]);
     // flared corbel ledge + cornice at the top of the tier
-    octo(rr + 0.9, rr, 1.6, castleShade, x, y + th - 0.8, z, body);
+    octo(rr + 0.9, rr, 1.6, castleShade, x, y + th - 0.85, z, body);   // top just below the tier top (not coplanar)
     octo(rr + 1.3, rr + 1.3, 0.8, castleTrim, x, y + th + 0.4, z, body);
     // framed gothic windows on the front face (one per tier, two on wide tiers)
     const ww = rr * 0.42, wh = Math.min(th * 0.42, rr * 1.1);
@@ -750,12 +757,12 @@ function castleIsland(parent) {
   }
   gothicWindow(0, 36, -586.6, 6, 10, g);
   box(136, 20, 3, castleWall, 0, 10, -604, g);                             // thin curtain wall (wider castle)
-  box(136, 1, 3.6, castleTrim, 0, 20.5, -604, g, false);                   // wall cap
+  noShadow(box(136, 1, 3.6, castleTrim, 0, 20.5, -604, g, false));                   // wall cap
   // gate front with an OPEN doorway (11 wide, 15 high) — you can see into the throne hall (screenshot 61)
   for (const sx of [-1, 1]) box(8.5, 28, 3, castleWall, sx * 9.75, 14, -588.5, g);   // wall either side of the opening
   box(11, 13, 3, castleWall, 0, 21.5, -588.5, g);                                      // wall above the opening
   box(29, 1, 3.6, castleTrim, 0, 28.5, -588.5, g, false);
-  box(13, 1.6, 1.2, castleTrim, 0, 15.8, -586.5, g, false);                // lintel
+  noShadow(box(13, 1.6, 1.2, castleTrim, 0, 15.8, -586.5, g, false));                // lintel
   // white stairs up to the hall floor (6 steps, faint green chevrons)
   const stair = mat('#eef0f2'), chev = mat('#8fe0a6'), HF = 6;
   for (let k = 0; k < HF; k++) box(11, 1, 2, stair, 0, k + 0.5, -575 - k * 2, g);
@@ -765,15 +772,16 @@ function castleIsland(parent) {
   // throne hall behind the door: raised floor, blue carpet runway, blue panelled walls,
   // white pillars, throne with a blue orb, bright window at the far end
   const hallZ0 = -587, hallZ1 = -602, hallD = hallZ0 - hallZ1, hz = (hallZ0 + hallZ1) / 2;
+  const shellD = hallD - 0.2, shellZ = hz - 0.1;   // walls + ceiling start inside the gate wall, not flush with its face
   box(18, HF, hallD + 2, mat('#d9dee3'), 0, HF / 2, hz, g);                           // hall floor (solid)
   box(5, 0.2, hallD, mat('#1f4fd0'), 0, HF + 0.1, hz, g, false);                       // runway carpet
   const panel = mat('#3d6fe0'), panelEdge = mat('#e9eef3');
   for (const sx of [-1, 1]) {
-    box(1, 18, hallD, panelEdge, sx * 8.5, HF + 9, hz, g);                            // hall side walls
+    box(1, 18, shellD, panelEdge, sx * 8.5, HF + 9, shellZ, g);                       // hall side walls
     for (let k = 0; k < 3; k++) box(0.3, 9, 3.4, panel, sx * 7.9, HF + 6, hallZ0 - 2.5 - k * 4.6, g, false);   // blue wall panels
     for (let k = 0; k < 2; k++) { const c = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 16, 12), panelEdge); c.position.set(sx * 6.4, HF + 8, hallZ0 - 4 - k * 6); c.castShadow = true; g.add(c); }
   }
-  box(18, 1, hallD, mat('#c9d0d6'), 0, HF + 18, hz, g, false);                         // ceiling
+  box(17.8, 1, shellD - 0.2, mat('#c9d0d6'), 0, HF + 18, shellZ, g, false);           // ceiling (inset from the walls' faces)
   const glow = box(12, 14, 0.3, mat('#eaf6ff', { emissive: '#eaf6ff', emissiveIntensity: 0.9 }), 0, HF + 8, hallZ1 + 0.3, g, false);   // bright back window
   box(4, 1, 4, mat('#e9eef3'), 0, HF + 0.5, hallZ1 + 3.5, g);                          // dais
   box(3.4, 1.4, 2.6, mat('#f2c94c'), 0, HF + 1.7, hallZ1 + 3.5, g, false);            // throne seat
@@ -808,7 +816,7 @@ export function buildWorld(scene) {
   const sideMat = texturedMat(C.islandSide, C.islandSideDark, 40, 3);
   const top = matte({ map: checker(C.grassA, C.grassB, W / 16, (z0 - z1) / 16), roughness: 0.95 });
   box(W, 12, z0 - z1, [sideMat, sideMat, top, sideMat, sideMat, sideMat], 0, -6, (z0 + z1) / 2, root).userData.class = 'island';
-  box(W + 1, 0.6, 1, mat(C.islandRim), 0, -0.25, z0, root, false); box(W + 1, 0.6, 1, mat(C.islandRim), 0, -0.25, z1, root, false);
+  noShadow(box(W + 1, 0.6, 1, mat(C.islandRim), 0, -0.25, z0, root, false)); noShadow(box(W + 1, 0.6, 1, mat(C.islandRim), 0, -0.25, z1, root, false));
 
   // road: U-turns at both ends + two chevron lanes; white curbs
   const laneTop = -8, laneBot = WORLD.roadEndZ + 6, laneLen = laneTop - laneBot;
@@ -819,7 +827,7 @@ export function buildWorld(scene) {
     const holder = new THREE.Group();
     const strip = new THREE.Mesh(new THREE.PlaneGeometry(w, len), matte({ map: tex }));
     strip.rotation.x = -Math.PI / 2; strip.receiveShadow = true; holder.add(strip);   // arrows point local -Z
-    holder.rotation.y = Math.atan2(-dx, -dz); holder.position.set(cx, 0.04, cz);
+    holder.rotation.y = Math.atan2(-dx, -dz); holder.position.set(cx, 0.1, cz);   // 10 cm above the grass: no z-fighting at a distance
     holder.userData.dynamic = true; root.add(holder);
     const along = dx !== 0;
     CONVEYORS.push({ minX: cx - (along ? len : w) / 2, maxX: cx + (along ? len : w) / 2, minZ: cz - (along ? w : len) / 2, maxZ: cz + (along ? w : len) / 2, dx, dz, cx, cz });
@@ -834,12 +842,12 @@ export function buildWorld(scene) {
   conveyor(-6, laneTop + 6, 12, 32, 1, 0);                                 // near strip, incl. near-left corner
   conveyor(6, laneBot - 6, 12, 32, -1, 0);                                 // far strip, incl. far-right corner
   for (const s of [-1, 1]) {
-    box(0.8, 0.4, laneLen + 12, mat(C.curb), s * 22.4, 0.2, (laneTop + laneBot) / 2, root, false);
-    box(0.8, 0.4, laneLen - 12, mat(C.curb), s * 9.6, 0.2, (laneTop + laneBot) / 2, root, false);
+    noShadow(box(0.8, 0.4, laneLen + 12, mat(C.curb), s * 22.4, 0.2, (laneTop + laneBot) / 2, root, false));
+    noShadow(box(0.8, 0.4, laneLen - 12, mat(C.curb), s * 9.6, 0.2, (laneTop + laneBot) / 2, root, false));
   }
   for (const zc of [laneTop + 6, laneBot - 6]) {
-    box(45.6, 0.4, 0.8, mat(C.curb), 0, 0.2, zc + Math.sign(zc - (laneTop + laneBot) / 2) * 6.4, root, false);
-    box(20, 0.4, 0.8, mat(C.curb), 0, 0.2, zc - Math.sign(zc - (laneTop + laneBot) / 2) * 6.4, root, false);
+    noShadow(box(45.6, 0.4, 0.8, mat(C.curb), 0, 0.2, zc + Math.sign(zc - (laneTop + laneBot) / 2) * 6.4, root, false));
+    noShadow(box(20, 0.4, 0.8, mat(C.curb), 0, 0.2, zc - Math.sign(zc - (laneTop + laneBot) / 2) * 6.4, root, false));
   }
 
   // Playing places (screenshot 48): each one is a RED half + a BLUE half side by side —
